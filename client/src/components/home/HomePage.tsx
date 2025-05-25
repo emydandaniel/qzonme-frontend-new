@@ -52,6 +52,9 @@ const HomePage: React.FC = () => {
     // First scroll to the top of the page
     window.scrollTo(0, 0);
     
+    // Clear any previous draft questions to start fresh
+    localStorage.removeItem('qzonme_draft_questions');
+    
     if (!userName.trim()) {
       toast({
         title: "Name is required",

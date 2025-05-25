@@ -165,8 +165,8 @@ const QuizCreation: React.FC = () => {
       
       // Create the quiz
       const quizResponse = await apiRequest("POST", "/api/quizzes", {
-        creatorId: currentUserId,
-        creatorName: creatorName,
+        title: `${creatorName}'s Quiz`,
+        description: `A quiz for ${creatorName}`,
         accessCode,
         urlSlug,
         dashboardToken
@@ -362,22 +362,37 @@ const QuizCreation: React.FC = () => {
   // Finish quiz creation
   const handleFinishQuiz = async () => {
     try {
+      // Validate quiz has enough questions
+      if (questions.length < requiredQuestionsCount) {
+        toast({
+          title: "More Questions Needed",
+          description: `Please add ${questionsNeeded} more question(s)`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Create the quiz
       const quiz = await createQuizMutation.mutateAsync();
       
-      // Clear the saved questions from localStorage once quiz is created successfully
+      // Clear saved questions from localStorage
       localStorage.removeItem('qzonme_draft_questions');
-      console.log("Cleared draft questions from local storage after successful quiz creation");
       
+      // Navigate to share page with the quiz ID
+      navigate(`/share/${quiz.id}`);
+      
+      // Show success toast
       toast({
         title: "Quiz Created!",
-        description: "Your quiz has been created successfully",
-        variant: "default"
+        description: "Your quiz is ready to share with friends",
       });
-      
-      // Navigate to share page
-      navigate(`/share/${quiz.id}`);
     } catch (error) {
-      console.error("Failed to create quiz:", error);
+      console.error("Error creating quiz:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create quiz. Please try again.",
+        variant: "destructive"
+      });
     }
   };
 
