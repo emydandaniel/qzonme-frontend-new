@@ -1,21 +1,21 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
-import { generateAccessCode, generateUrlSlug, generateDashboardToken } from "@/lib/utils";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { apiRequest } from "../../lib/queryClient";
+import { useToast } from "../../hooks/use-toast";
+import { generateAccessCode, generateUrlSlug, generateDashboardToken } from "../../lib/utils";
+import { Card, CardContent } from "../../components/ui/card";
+import { Button } from "../../components/ui/button";
+import { Label } from "../../components/ui/label";
+import { Input } from "../../components/ui/input";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { AlertCircle, Image, Loader2, X } from "lucide-react";
 import MultipleChoiceEditor from "./MultipleChoiceEditorNew";
 import QuestionList from "./QuestionList";
 import AdPlaceholder from "../common/AdPlaceholder";
 // Remove Layout import to prevent duplicate headers/footers
-import { Question } from "@shared/schema";
-import { validateQuiz } from "@/lib/quizUtils";
+import { Question } from "../../../backend/shared/schema";
+import { validateQuiz } from "../../lib/quizUtils";
 import { nanoid } from 'nanoid';
 
 const QuizCreation: React.FC = () => {
@@ -227,20 +227,17 @@ const QuizCreation: React.FC = () => {
         }
       }
 
-      // Prepare the correct answers array
-      const correctAnswers = [options[correctOption]];
-
       // Create the question object
       const newQuestion: Question = {
-        id: Date.now(), // Temporary ID until saved to server
+        id: nanoid(), // Generate a unique string ID
         quizId: 0, // Will be set when quiz is created
-        text: questionText,
+        question: questionText, // Use question instead of text
         type: "multiple-choice",
         options,
-        correctAnswers,
+        correctAnswer: correctOption, // Use correctAnswer (number) instead of correctAnswers (array)
         hint: null,
         order: questions.length,
-        imageUrl
+        imageUrl: imageUrl as string | null
       };
 
       // Add to questions collection
@@ -313,13 +310,13 @@ const QuizCreation: React.FC = () => {
     const question = questions[index];
     
     // Set the question text
-    setQuestionText(question.text);
+    setQuestionText(question.question);
     
     // Set the options and correct answer
     if (question.options) {
       setOptions(question.options as string[]);
       const correctAnswerIndex = (question.options as string[]).findIndex(
-        opt => (question.correctAnswers as string[]).includes(opt)
+        opt => (question.correctAnswer as string[]).includes(opt)
       );
       setCorrectOption(correctAnswerIndex >= 0 ? correctAnswerIndex : 0);
     }
