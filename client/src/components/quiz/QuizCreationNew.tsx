@@ -16,6 +16,7 @@ import AdPlaceholder from "../common/AdPlaceholder";
 // Remove Layout import to prevent duplicate headers/footers
 import { Question } from "@shared/schema";
 import { validateQuiz } from "@/lib/quizUtils";
+import { nanoid } from 'nanoid';
 
 const QuizCreation: React.FC = () => {
   // Component-level unique key for tracking
@@ -107,16 +108,13 @@ const QuizCreation: React.FC = () => {
     mutationFn: async (file: File) => {
       const formData = new FormData();
       formData.append("image", file);
-      
-      const response = await fetch("/api/upload-image", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/upload-image`, {
         method: "POST",
         body: formData
       });
-      
       if (!response.ok) {
         throw new Error("Failed to upload image");
       }
-      
       return response.json();
     }
   });
@@ -133,7 +131,6 @@ const QuizCreation: React.FC = () => {
         });
         throw new Error("Creator name is missing");
       }
-      
       // Validate quiz has enough questions
       if (questions.length < requiredQuestionsCount) {
         toast({
@@ -143,41 +140,34 @@ const QuizCreation: React.FC = () => {
         });
         throw new Error("Not enough questions");
       }
-      
       // Get user ID from session
       const currentUserId = parseInt(sessionStorage.getItem("userId") || "0");
-      
       console.log(`Creating quiz with name: "${creatorName}" (ensuring fresh data)`);
-      
       // Generate fresh tokens and codes
       const accessCode = generateAccessCode();
       const dashboardToken = generateDashboardToken();
-      
       // Important: Force a fresh slug creation with the current name to avoid cache issues
       // Clear any old creatorName data from localStorage (if any) as a safety measure
       localStorage.removeItem("creatorName");
-      
       // Generate the URL slug with the current creator name
       const urlSlug = generateUrlSlug(creatorName);
-      
       // Store the current dashboard token in sessionStorage for immediate access
       sessionStorage.setItem("currentQuizDashboardToken", dashboardToken);
-      
+      // Generate a unique quiz id
+      const quizId = nanoid();
       // Create the quiz
       const quizResponse = await apiRequest("POST", "/api/quizzes", {
+        id: quizId,
         title: `${creatorName}'s Quiz`,
         description: `A quiz for ${creatorName}`,
         accessCode,
         urlSlug,
         dashboardToken
       });
-      
       if (!quizResponse.ok) {
         throw new Error("Failed to create quiz");
       }
-      
       const quiz = await quizResponse.json();
-      
       // Create all questions for the quiz
       const questionPromises = questions.map((question, index) =>
         apiRequest("POST", "/api/questions", {
@@ -186,7 +176,6 @@ const QuizCreation: React.FC = () => {
           order: index
         })
       );
-      
       await Promise.all(questionPromises);
       return quiz;
     }
