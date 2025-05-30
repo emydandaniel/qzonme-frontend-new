@@ -10,12 +10,11 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 
 interface ShareQuizProps {
-  accessCode: string;
   quizId: number;
   urlSlug: string;
 }
 
-const ShareQuiz: React.FC<ShareQuizProps> = ({ accessCode, quizId, urlSlug }) => {
+const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);

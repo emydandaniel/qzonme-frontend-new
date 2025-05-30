@@ -206,15 +206,13 @@ const Results: React.FC<ResultsProps> = ({ params }) => {
   });
   
   // Type casting to fix TypeScript errors
-  return (
-    <ResultsView
+  return (    <ResultsView
       userName={userName}
       quizCreator={quiz.creatorName || ""}
       questions={questions as any[]}
       answers={attemptData.answers || []}
       attempts={attemptsList as any[]}
       score={attemptData.score || 0}
-      currentAttemptId={attemptId}
     />
   );
 };
