@@ -106,16 +106,33 @@ const QuizCreation: React.FC = () => {
   // Image upload mutation
   const uploadImageMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("image", file);
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/upload-image`, {
-        method: "POST",
-        body: formData
-      });
-      if (!response.ok) {
-        throw new Error("Failed to upload image");
+      try {
+        console.log("Starting image upload...");
+        const formData = new FormData();
+        formData.append("image", file);
+        
+        const url = `${import.meta.env.VITE_API_URL}/api/upload-image`;
+        console.log("Uploading to:", url);
+        
+        const response = await fetch(url, {
+          method: "POST",
+          body: formData,
+          credentials: 'include',
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error("Image upload failed:", errorText);
+          throw new Error(`Failed to upload image: ${response.status} ${errorText}`);
+        }
+        
+        const result = await response.json();
+        console.log("Image upload successful:", result);
+        return result;
+      } catch (error) {
+        console.error("Error uploading image:", error);
+        throw error;
       }
-      return response.json();
     }
   });
 
@@ -131,6 +148,7 @@ const QuizCreation: React.FC = () => {
         });
         throw new Error("Creator name is missing");
       }
+      
       // Validate quiz has enough questions
       if (questions.length < requiredQuestionsCount) {
         toast({
@@ -140,44 +158,61 @@ const QuizCreation: React.FC = () => {
         });
         throw new Error("Not enough questions");
       }
-      // Get user ID from session
 
-      console.log(`Creating quiz with name: "${creatorName}" (ensuring fresh data)`);
-      // Generate fresh tokens and codes
-      const accessCode = generateAccessCode();
-      const dashboardToken = generateDashboardToken();
-      // Important: Force a fresh slug creation with the current name to avoid cache issues
-      // Clear any old creatorName data from localStorage (if any) as a safety measure
-      localStorage.removeItem("creatorName");
-      // Generate the URL slug with the current creator name
-      const urlSlug = generateUrlSlug(creatorName);
-      // Store the current dashboard token in sessionStorage for immediate access
-      sessionStorage.setItem("currentQuizDashboardToken", dashboardToken);
-      // Generate a unique quiz id
-      const quizId = nanoid();
-      // Create the quiz
-      const quizResponse = await apiRequest("POST", "/api/quizzes", {
-        id: quizId,
-        title: `${creatorName}'s Quiz`,
-        description: `A quiz for ${creatorName}`,
-        accessCode,
-        urlSlug,
-        dashboardToken
-      });
-      if (!quizResponse.ok) {
-        throw new Error("Failed to create quiz");
+      try {
+        console.log("Creating quiz with name:", creatorName);
+        
+        // Generate fresh tokens and codes
+        const accessCode = generateAccessCode();
+        const dashboardToken = generateDashboardToken();
+        const urlSlug = generateUrlSlug(creatorName);
+        
+        // Store tokens in session storage for immediate access
+        sessionStorage.setItem("currentQuizDashboardToken", dashboardToken);
+        sessionStorage.setItem("currentQuizAccessCode", accessCode);
+        sessionStorage.setItem("currentQuizUrlSlug", urlSlug);
+        
+        // Generate a unique quiz id
+        const quizId = nanoid();
+        
+        // Create the quiz
+        console.log("Sending quiz creation request...");
+        const quizResponse = await apiRequest("POST", "/api/quizzes", {
+          id: quizId,
+          title: `${creatorName}'s Quiz`,
+          description: `A quiz for ${creatorName}`,
+          creatorName,
+          accessCode,
+          urlSlug,
+          dashboardToken
+        });
+        
+        if (!quizResponse.ok) {
+          const errorText = await quizResponse.text();
+          throw new Error(`Failed to create quiz: ${errorText}`);
+        }
+        
+        const quiz = await quizResponse.json();
+        console.log("Quiz created successfully:", quiz);
+        
+        // Create all questions for the quiz
+        console.log("Creating questions...");
+        const questionPromises = questions.map((question, index) =>
+          apiRequest("POST", "/api/questions", {
+            ...question,
+            quizId: quiz.id,
+            order: index
+          })
+        );
+        
+        await Promise.all(questionPromises);
+        console.log("All questions created successfully");
+        
+        return quiz;
+      } catch (error) {
+        console.error("Error creating quiz:", error);
+        throw error;
       }
-      const quiz = await quizResponse.json();
-      // Create all questions for the quiz
-      const questionPromises = questions.map((question, index) =>
-        apiRequest("POST", "/api/questions", {
-          ...question,
-          quizId: quiz.id,
-          order: index
-        })
-      );
-      await Promise.all(questionPromises);
-      return quiz;
     }
   });
 

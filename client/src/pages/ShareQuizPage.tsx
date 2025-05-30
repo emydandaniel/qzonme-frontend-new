@@ -3,6 +3,15 @@ import { useQuery } from "@tanstack/react-query";
 import ShareQuiz from "@/components/quiz/ShareQuiz";
 import { useToast } from "@/hooks/use-toast";
 import MetaTags from "@/components/common/MetaTags";
+import { apiRequest } from "@/lib/api";
+
+interface Quiz {
+  id: string;
+  creatorName: string;
+  urlSlug: string;
+  accessCode: string;
+  dashboardToken?: string;
+}
 
 interface ShareQuizPageProps {
   params: {
@@ -11,26 +20,26 @@ interface ShareQuizPageProps {
 }
 
 const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
-  const quizId = parseInt(params.quizId);
+  const quizId = params.quizId;
   const { toast } = useToast();
 
-  // Fetch quiz with proper type
-  const { data: quiz, isLoading: isLoadingQuiz, error } = useQuery<{
-    id: number;
-    accessCode: string;
-    urlSlug: string;
-    creatorName: string;
-    createdAt: string;
-  }>({
-    queryKey: [`/api/quizzes/${quizId}`],
-    staleTime: 0, // Don't use cached data
-    refetchOnMount: true, // Always fetch on component mount
+  const { data: quiz, isLoading: isLoadingQuiz, error } = useQuery<Quiz, Error>({
+    queryKey: ['quiz', quizId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/quizzes/${quizId}`);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch quiz: ${response.statusText}`);
+      }
+      const data = await response.json();
+      return data as Quiz;
+    }
   });
 
   React.useEffect(() => {
     if (error) {
+      console.error("Error fetching quiz:", error);
       toast({
-        title: "Error",
+        title: "Error Loading Quiz",
         description: "Failed to load quiz. Please try again.",
         variant: "destructive",
       });
@@ -48,21 +57,35 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
     );
   }
 
-  // Add debugging info
-  console.log("ShareQuizPage: quiz data", { quizId, quiz, error });
-  
-  // Check for the just created quiz in session storage as fallback
+  // Get saved quiz data from session storage as fallback
   const sessionQuizId = sessionStorage.getItem("currentQuizId");
-  const sessionQuizAccessCode = sessionStorage.getItem("currentQuizAccessCode");
   const sessionQuizUrlSlug = sessionStorage.getItem("currentQuizUrlSlug");
+  const sessionCreatorName = sessionStorage.getItem("currentCreatorName");
   
-  // If quiz from API failed but we have session data, use that
-  if (!quiz && sessionQuizId && sessionQuizId === params.quizId && sessionQuizAccessCode && sessionQuizUrlSlug) {
-    console.log("Using session storage fallback for quiz data");
-    return (      <ShareQuiz
-        quizId={quizId}
-        urlSlug={sessionQuizUrlSlug}
-      />
+  // If quiz from API failed but we have matching session data, use that
+  if (!quiz && sessionQuizId === quizId && sessionQuizUrlSlug && sessionCreatorName) {
+    const fallbackQuiz = {
+      id: sessionQuizId,
+      creatorName: sessionCreatorName,
+      urlSlug: sessionQuizUrlSlug,
+      accessCode: sessionStorage.getItem("currentQuizAccessCode") || ''
+    };
+
+    return (
+      <>
+        <MetaTags 
+          creatorName={fallbackQuiz.creatorName}
+          url={`${window.location.origin}/quiz/${fallbackQuiz.urlSlug}`}
+          imageUrl="/favicon.png"
+          title={`${fallbackQuiz.creatorName}'s Quiz Just for You 💬`}
+          description={`How well do you know ${fallbackQuiz.creatorName}? Try this private QzonMe quiz they made just for close friends.`}
+        />
+        
+        <ShareQuiz
+          quizId={quizId}
+          urlSlug={fallbackQuiz.urlSlug}
+        />
+      </>
     );
   }
 
@@ -72,10 +95,12 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
         <div className="text-center">
           <h2 className="text-xl font-bold mb-2">Quiz Not Found</h2>
           <p className="text-muted-foreground mb-4">
-            Sorry, we couldn't find the quiz you're looking for (ID: {quizId}).
+            Sorry, we couldn't find the quiz you're looking for.
           </p>
-          <div className="mb-4">
-            <p className="text-sm text-gray-600">Debug info: session quiz ID: {sessionQuizId || 'none'}</p>
+          <div className="mb-4 text-sm text-gray-600">
+            <p>Quiz ID: {quizId}</p>
+            <p>Session quiz ID: {sessionQuizId || 'none'}</p>
+            {error && <p>Error: {error.toString()}</p>}
           </div>
           <a href="/" className="text-primary hover:underline">
             Return to Home
@@ -85,23 +110,20 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
     );
   }
 
-  // Use type assertion to help TypeScript understand the quiz structure
-  const quizData = quiz as any;
-  
+  // At this point TypeScript knows quiz is not null
   return (
     <>
-      {/* Add meta tags for WhatsApp link sharing */}
       <MetaTags 
-        creatorName={quizData.creatorName}
-        url={`${window.location.origin}/quiz/${quizData.accessCode}`}
+        creatorName={quiz.creatorName}
+        url={`${window.location.origin}/quiz/${quiz.urlSlug}`}
         imageUrl="/favicon.png"
-        title={`${quizData.creatorName}'s Quiz Just for You 💬`}
-        description={`How well do you know ${quizData.creatorName}? Try this private QzonMe quiz they made just for close friends.`}
+        title={`${quiz.creatorName}'s Quiz Just for You 💬`}
+        description={`How well do you know ${quiz.creatorName}? Try this private QzonMe quiz they made just for close friends.`}
       />
       
       <ShareQuiz
         quizId={quizId}
-        urlSlug={quizData.urlSlug}
+        urlSlug={quiz.urlSlug}
       />
     </>
   );

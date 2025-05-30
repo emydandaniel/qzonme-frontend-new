@@ -14,22 +14,31 @@ export async function apiRequest(
   path: string,
   data?: unknown
 ): Promise<Response> {
-  const url = getApiUrl(path);
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
+  try {
+    const url = getApiUrl(path);
+    console.log(`Making ${method} request to:`, url);
 
-  const response = await fetch(url, {
-    method,
-    headers,
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: 'include',
-  });
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`${response.status}: ${text}`);
+    const response = await fetch(url, {
+      method,
+      headers,
+      body: data ? JSON.stringify(data) : undefined,
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error(`API request failed (${response.status}):`, text);
+      throw new Error(`${response.status}: ${text}`);
+    }
+
+    console.log(`${method} request to ${path} successful`);
+    return response;
+  } catch (error) {
+    console.error('API request error:', error);
+    throw error;
   }
-
-  return response;
-} 
+}

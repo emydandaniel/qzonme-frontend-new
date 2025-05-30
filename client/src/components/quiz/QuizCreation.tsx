@@ -430,9 +430,8 @@ const QuizCreation: React.FC = () => {
       console.log("Access Code:", quiz.accessCode);
       console.log("URL Slug:", quiz.urlSlug, "- Generated from name:", creatorName);
       console.log("Dashboard Token:", quiz.dashboardToken);
-      
-      // CRITICAL: Store these in session storage for the share page
-      sessionStorage.setItem("currentQuizId", quiz.id.toString());
+        // CRITICAL: Store these in session storage for the share page
+      sessionStorage.setItem("currentQuizId", quiz.id);
       sessionStorage.setItem("currentQuizAccessCode", quiz.accessCode);
       sessionStorage.setItem("currentQuizUrlSlug", quiz.urlSlug);
       sessionStorage.setItem("currentQuizDashboardToken", quiz.dashboardToken);

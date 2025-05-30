@@ -10,7 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
 
 interface ShareQuizProps {
-  quizId: number;
+  quizId: string;
   urlSlug: string;
 }
 
