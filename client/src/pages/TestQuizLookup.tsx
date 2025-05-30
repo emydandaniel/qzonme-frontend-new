@@ -4,9 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import Layout from "@/components/common/Layout";
@@ -42,8 +40,7 @@ const TestQuizLookup: React.FC = () => {
       navigate(`/quiz/code/${accessCode}`);
     }
   };
-  
-  const handleCopyUrl = () => {
+    const handleCopyUrl = () => {
     const url = lookupType === "slug" 
       ? `${currentUrl}/quiz/${slug}`
       : `${currentUrl}/quiz/code/${accessCode}`;
@@ -55,7 +52,7 @@ const TestQuizLookup: React.FC = () => {
           description: "The quiz URL has been copied to your clipboard.",
         });
       })
-      .catch(err => {
+      .catch(() => {
         toast({
           title: "Copy Failed",
           description: "Could not copy the URL. Please try again.",

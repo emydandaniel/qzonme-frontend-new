@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { questionAnswerSchema, QuestionAnswer, Quiz, Question } from "@shared/schema";
+import { QuestionAnswer, Quiz, Question } from "@/lib/schema";
 import QuizAnswer from "@/components/quiz/QuizAnswer";
 import { calculateScore } from "@/lib/quizUtils";
 import { Card, CardContent } from "@/components/ui/card";

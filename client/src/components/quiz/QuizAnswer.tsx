@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Question, QuestionAnswer } from "@shared/schema";
+import { Question, QuestionAnswer } from "@/lib/schema";
 import { createAvatarPlaceholder, showAdInterstitial } from "@/lib/utils";
 import { verifyAnswer } from "@/lib/quizUtils";
-import { apiRequest } from "@/lib/queryClient";
+
 import AdPlaceholder from "../common/AdPlaceholder";
 
 interface QuizAnswerProps {
@@ -78,18 +78,13 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
   // Calculate progress percentage
   const progressPercentage = ((currentQuestionIndex + 1) / questions.length) * 100;
   
-  // Calculate progress dots (maximum 5 dots)
-  const progressDots = Array(Math.min(questions.length, 5))
-    .fill(null)
-    .map((_, i) => i <= currentQuestionIndex);
-  
   const handleOptionSelect = (option: string) => {
     setSelectedOption(option);
   };
   
   const verifyAnswerMutation = useMutation({
     mutationFn: async (answer: string | string[]) => {
-      const result = await verifyAnswer(currentQuestion.id, answer);
+      const result = await verifyAnswer(Number(currentQuestion.id), answer);
       return result;
     }
   });
@@ -256,7 +251,7 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
           <div className="question-container">
             <div className="text-center mb-6">
               <h3 className="text-xl font-poppins font-semibold mb-2">
-                {currentQuestion.text}
+                {currentQuestion.question}
               </h3>
               
               {/* Display question image if available with loading indicator */}

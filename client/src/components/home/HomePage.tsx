@@ -9,14 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, Plus, Users, MessageSquare, Heart, ThumbsUp, Share2, Trophy } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { ArrowRight, Plus, Users, Heart, ThumbsUp, Share2, Trophy } from "lucide-react";
+
 
 const HomePage: React.FC = () => {
   const [userName, setUserName] = useState("");
   const [, navigate] = useLocation();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
+
 
   // Check if there's a pending quiz to answer
   const [pendingQuiz, setPendingQuiz] = useState<{

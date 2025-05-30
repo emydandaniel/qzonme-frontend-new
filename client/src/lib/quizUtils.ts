@@ -1,4 +1,4 @@
-import { Question, QuestionAnswer } from "@shared/schema";
+import { Question, QuestionAnswer } from "./schema";
 import { apiRequest } from "./queryClient";
 
 // Verify a single answer against a question
@@ -56,17 +56,22 @@ export function isAnswerCorrect(
   question: Question,
   answer: string | string[]
 ): boolean {
-  const correctAnswers = question.correctAnswers as string[];
+  const correctAnswers = Array.isArray(question.correctAnswer) 
+    ? question.correctAnswer 
+    : [question.correctAnswer];
+  
+  const normalizeValue = (value: string | number): string => 
+    String(value).toLowerCase();
   
   if (Array.isArray(answer)) {
     return answer.every(ans => 
       correctAnswers.some(correct => 
-        correct.toLowerCase() === ans.toLowerCase()
+        normalizeValue(correct) === normalizeValue(ans)
       )
     );
   } else {
     return correctAnswers.some(
-      correct => correct.toLowerCase() === answer.toLowerCase()
+      correct => normalizeValue(correct) === normalizeValue(answer)
     );
   }
 }

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Question, QuizAttempt } from "@shared/schema";
+import { Question, QuizAttempt } from "@/lib/schema";
 import { formatPercentage } from "@/lib/utils";
 import Layout from "../common/Layout";
 import { Share, RefreshCw } from "lucide-react";
@@ -11,17 +11,15 @@ import { useToast } from "@/hooks/use-toast";
 
 interface DashboardProps {
   quizId: number;
-  accessCode: string;
   questions: Question[];
   attempts: QuizAttempt[];
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ 
   quizId, 
-  accessCode, 
   questions, 
   attempts 
-}) => {
+})=> {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -133,7 +131,7 @@ const Dashboard: React.FC<DashboardProps> = ({
     });
     
     const isCommonAnswerCorrect = 
-      (question.correctAnswers as string[]).includes(mostCommonAnswer);
+      (Array.isArray(question.correctAnswer) ? question.correctAnswer : [question.correctAnswer]).includes(mostCommonAnswer);
     
     return {
       question,
@@ -257,7 +255,7 @@ const Dashboard: React.FC<DashboardProps> = ({
               {questionPerformance.map(({ question, correctPercentage, mostCommonAnswer, isCommonAnswerCorrect }) => (
                 <div key={question.id} className="p-4 rounded-lg border border-gray-200">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium">{question.text}</span>
+                    <span className="font-medium">{question.question}</span>
                     <span className={`text-sm px-2 py-1 ${
                       correctPercentage >= 50 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     } rounded`}>

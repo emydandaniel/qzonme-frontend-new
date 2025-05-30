@@ -1,5 +1,5 @@
 import React from "react";
-import { Question } from "@shared/schema";
+import { Question } from "@/lib/schema";
 import { Edit, Trash2, Image as ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -49,7 +49,7 @@ const QuestionList: React.FC<QuestionListProps> = ({
                 </Tooltip>
               </TooltipProvider>
             )}
-            <span>{question.text}</span>
+            <span>{question.question}</span>
           </div>
           <div className="flex space-x-2">
             {question.imageUrl && (

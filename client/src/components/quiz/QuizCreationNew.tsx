@@ -7,20 +7,20 @@ import { generateAccessCode, generateUrlSlug, generateDashboardToken } from "../
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
-import { Input } from "../../components/ui/input";
+
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { AlertCircle, Image, Loader2, X } from "lucide-react";
 import MultipleChoiceEditor from "./MultipleChoiceEditorNew";
 import QuestionList from "./QuestionList";
 import AdPlaceholder from "../common/AdPlaceholder";
 // Remove Layout import to prevent duplicate headers/footers
-import { Question } from "../../../backend/shared/schema";
-import { validateQuiz } from "../../lib/quizUtils";
+import { Question } from "@/lib/schema";
+
 import { nanoid } from 'nanoid';
 
 const QuizCreation: React.FC = () => {
   // Component-level unique key for tracking
-  const componentKey = React.useId();
+
   
   // Creator name from homepage (stored in sessionStorage)
   const [creatorName, setCreatorName] = useState("");
@@ -141,7 +141,7 @@ const QuizCreation: React.FC = () => {
         throw new Error("Not enough questions");
       }
       // Get user ID from session
-      const currentUserId = parseInt(sessionStorage.getItem("userId") || "0");
+
       console.log(`Creating quiz with name: "${creatorName}" (ensuring fresh data)`);
       // Generate fresh tokens and codes
       const accessCode = generateAccessCode();

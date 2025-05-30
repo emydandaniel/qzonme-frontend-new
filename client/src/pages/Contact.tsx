@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import Layout from "@/components/common/Layout";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { MessageSquare, Mail, Send } from "lucide-react";
+import { MessageSquare, Send } from "lucide-react";
 import MetaTags from "@/components/common/MetaTags";
 
 const Contact: React.FC = () => {

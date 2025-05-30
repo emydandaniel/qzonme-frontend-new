@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { QuizAttempt } from "@shared/schema";
+import { QuizAttempt } from "@/lib/schema";
 import { formatPercentage } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
@@ -73,7 +73,7 @@ const Leaderboard: React.FC<LeaderboardProps> = ({
         score: Math.min(currentUserScore, currentUserTotalQuestions || 1),
         totalQuestions: currentUserTotalQuestions || 1,
         answers: [],
-        completedAt: new Date()
+        completedAt: new Date().toISOString()
       };
       
       // Add to sorted array and resort

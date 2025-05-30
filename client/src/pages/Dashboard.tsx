@@ -1,10 +1,9 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardView from "@/components/quiz/Dashboard";
 import ShareQuiz from "@/components/quiz/ShareQuiz";
-import { Question, QuizAttempt, Quiz } from "@shared/schema";
-import { Loader2, AlertTriangle, Clock } from "lucide-react";
-import Layout from "@/components/common/Layout";
+import { Question, QuizAttempt, Quiz } from "@/lib/schema";
+import { Loader2, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
@@ -42,16 +41,6 @@ const Dashboard: React.FC<DashboardProps> = ({ params }) => {
     queryKey: [`/api/quizzes/${quizId}/questions`],
     enabled: !!quizId,
   });
-
-  // Track the number of refreshes to trigger complete cache clearing periodically
-  const [refreshCount, setRefreshCount] = React.useState(0);
-  const [lastRefreshTime, setLastRefreshTime] = React.useState(Date.now());
-
-  // Create a unique cache key that changes every time we want to force a complete refresh
-  const cacheKey = React.useMemo(() => 
-    `dashboard-${quizId}-${refreshCount}-${Date.now()}`, 
-    [quizId, refreshCount]
-  );
   
   // Use direct state management instead of React Query for attempts data
   const [attempts, setAttempts] = React.useState<QuizAttempt[]>([]);
@@ -223,10 +212,8 @@ const Dashboard: React.FC<DashboardProps> = ({ params }) => {
           the quiz and dashboard will no longer be accessible.
         </AlertDescription>
       </Alert>
-      
-      <DashboardView
+        <DashboardView
         quizId={quiz.id}
-        accessCode={quiz.accessCode}
         questions={questions}
         attempts={attempts}
       />

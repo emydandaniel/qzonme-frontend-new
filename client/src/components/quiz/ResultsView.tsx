@@ -2,13 +2,12 @@ import React from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Question, QuestionAnswer, QuizAttempt } from "@shared/schema";
+import { Question, QuestionAnswer, QuizAttempt } from "@/lib/schema";
 import { formatPercentage, getRemarkByScore } from "@/lib/utils";
 import Leaderboard from "../common/Leaderboard";
 import AdPlaceholder from "../common/AdPlaceholder";
 import Layout from "../common/Layout";
 import { Check, X } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 
 interface ResultsViewProps {
   userName: string;
@@ -17,29 +16,19 @@ interface ResultsViewProps {
   answers: QuestionAnswer[];
   attempts: QuizAttempt[];
   score: number;
-  currentAttemptId: number;  // Add the current attempt ID
 }
 
 const ResultsView: React.FC<ResultsViewProps> = ({
   userName,
-  quizCreator,
-  questions,
+  quizCreator,  questions,
   answers,
   attempts,
-  score,
-  currentAttemptId
+  score
 }) => {
   const [, navigate] = useLocation();
   const percentage = formatPercentage(score, questions.length);
-  
-  const handleCreateOwnQuiz = () => {
+    const handleCreateOwnQuiz = () => {
     navigate("/create");
-  };
-  
-  const handleTryAgain = () => {
-    // Get the quiz access code from the URL or session storage
-    const accessCode = window.location.pathname.split("/").pop() || "";
-    navigate(`/quiz/${accessCode}`);
   };
   
   // Match questions with answers for display - with enhanced debugging 
@@ -48,7 +37,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
     
     // Debug output to check answer data
     console.log(`Question ${question.id} mapping:`, {
-      questionText: question.text,
+      questionText: question.question,
       answerFound: !!answer,
       userAnswer: answer?.userAnswer,
       isCorrect: answer?.isCorrect
@@ -61,7 +50,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
       enhancedAnswer = {
         ...answer,
         userAnswer: answer.isCorrect ? 
-          (Array.isArray(question.correctAnswers) ? question.correctAnswers[0] : question.correctAnswers) : 
+          (Array.isArray(question.correctAnswer) ? question.correctAnswer[0] : question.correctAnswer) : 
           "Answer was recorded but not displayed correctly"
       };
       console.log("Enhanced empty answer:", enhancedAnswer);
@@ -83,10 +72,8 @@ const ResultsView: React.FC<ResultsViewProps> = ({
   
   // We don't need to manually enhance the attempts array anymore
   // The Leaderboard component will handle this directly
-  
-  const [showAnswers, setShowAnswers] = React.useState(false);
+    const [showAnswers, setShowAnswers] = React.useState(false);
   const personalizedRemark = getRemarkByScore(score, questions.length);
-  const { toast } = useToast();
   
   return (
     <Layout>
@@ -128,7 +115,7 @@ const ResultsView: React.FC<ResultsViewProps> = ({
                       }`}
                     >
                       <div className="flex justify-between">
-                        <span className="font-medium">{question.text}</span>
+                        <span className="font-medium">{question.question}</span>
                         {answer?.isCorrect ? (
                           <Check className="h-5 w-5 text-green-500" />
                         ) : (
@@ -146,9 +133,9 @@ const ResultsView: React.FC<ResultsViewProps> = ({
                       </div>
                       {!answer?.isCorrect && (
                         <div className="text-sm text-red-600 mt-1">
-                          <strong>Correct answer:</strong> {Array.isArray(question.correctAnswers) 
-                            ? question.correctAnswers.join(" or ") 
-                            : String(question.correctAnswers || "")}
+                <strong>Correct answer:</strong> {Array.isArray(question.correctAnswer)
+                            ? question.correctAnswer.join(" or ")
+                            : String(question.correctAnswer || "")}
                         </div>
                       )}
                     </li>

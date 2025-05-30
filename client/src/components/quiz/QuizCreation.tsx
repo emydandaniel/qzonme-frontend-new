@@ -8,30 +8,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { AlertCircle, Image, Loader2, X } from "lucide-react";
+import { Image, Loader2, X } from "lucide-react";
 import MultipleChoiceEditor from "./MultipleChoiceEditor";
 import QuestionList from "./QuestionList";
 import AdPlaceholder from "../common/AdPlaceholder";
 import Layout from "../common/Layout";
-import { Question } from "@shared/schema";
+import { Question } from "@/lib/schema";
 import { validateQuiz } from "@/lib/quizUtils";
 
 const QuizCreation: React.FC = () => {
-  // Force component to completely rebuild on each mount with key
-  // This ensures no stale state persists between navigations
-  // Add additional entropy (timestamp + random) to React's useId to guarantee uniqueness
-  const mountId = React.useId() + "-" + Math.random().toString(36).substring(2, 15) + "-" + Date.now();
+  // Generate a unique mount ID for the component instance
+  const uniqueId = React.useId();
   
-  // Creator name - retrieved from username in session storage (set on homepage)
+  // Creator name from session storage
   const [creatorName, setCreatorName] = useState(() => {
-    // Get the username from session storage as default
     const savedUsername = sessionStorage.getItem("username") || "";
     return savedUsername;
   });
   
-  // Since we get the name from homepage, it's already confirmed
-  const [isNameConfirmed, setIsNameConfirmed] = useState(true);
-
   // Question state
   const [questionText, setQuestionText] = useState("");
   const [questionType] = useState<"multiple-choice">("multiple-choice");
@@ -60,7 +54,6 @@ const QuizCreation: React.FC = () => {
     try {
       // CRITICAL FIX: Explicitly force reset the creator name to empty
       setCreatorName("");
-      setIsNameConfirmed(false);
       
       // Clear all form fields
       setQuestionText("");
@@ -86,7 +79,6 @@ const QuizCreation: React.FC = () => {
         
         // Make creator name match the username
         setCreatorName(username || "");
-        setIsNameConfirmed(true);
         
         // Clear localStorage
         localStorage.clear();
@@ -213,8 +205,6 @@ const QuizCreation: React.FC = () => {
       return;
     }
 
-    let correctAnswers: string[] = [];
-    
     // Validate multiple choice options
     if (options.some(opt => !opt.trim())) {
       toast({
@@ -224,13 +214,10 @@ const QuizCreation: React.FC = () => {
       });
       return;
     }
-    correctAnswers = [options[correctOption]];
 
     try {
       // Handle image upload if present
       let imageUrl = null;
-      
-      // Check if we're editing a question with an existing image URL
       const existingImageUrl = sessionStorage.getItem("currentEditingImageUrl");
       
       if (questionImage) {
@@ -241,70 +228,66 @@ const QuizCreation: React.FC = () => {
           console.error("Failed to upload image:", err);
           toast({
             title: "Image upload failed",
-            description: "Your question will be added without the image",
+            description: "Please try again or skip the image",
             variant: "destructive"
           });
-          // Fallback to no image
-          imageUrl = null;
+          return;
         }
-      } else if (questionImagePreview && existingImageUrl) {
-        // Use the existing image URL if we're editing and have a preview
-        imageUrl = existingImageUrl;
       }
-      
-      // Clear the current editing image URL from session storage
-      sessionStorage.removeItem("currentEditingImageUrl");
 
+      // Create the new question object
       const newQuestion: Question = {
-        id: Date.now(), // Temporary ID until saved to server
-        quizId: 0, // Will be set when quiz is created
-        text: questionText,
+        id: questions.length + 1,
+        quizId: -1, // Will be set when the quiz is created
+        question: questionText,
         type: questionType,
-        options: options,
-        correctAnswers,
+        options: [...options],
+        correctAnswer: options[correctOption],
         hint: null,
-        order: questions.length,
-        imageUrl: imageUrl
+        order: questions.length + 1,
+        imageUrl: imageUrl || existingImageUrl || null
       };
 
+      // Add the question to the list
       setQuestions([...questions, newQuestion]);
-      resetForm();
-      setCurrentQuestionIndex(questions.length + 1);
       
+      // Reset form fields
+      setQuestionText("");
+      setOptions(["", "", "", ""]);
+      setCorrectOption(0);
+      handleRemoveImage();
+      
+      // Clear any editing image URL from session storage
+      sessionStorage.removeItem("currentEditingImageUrl");
+
+      // Show success toast
       toast({
-        title: questionImage ? "Question with image added" : "Question added",
-        description: "Your question has been added to the quiz",
-        variant: "default"
+        title: questions.length >= 4 ? "Quiz complete!" : "Question added",
+        description: questions.length >= 4 
+          ? "You've added all required questions! Click 'Finish & Share' to continue."
+          : `Question ${questions.length + 1} of 5 added successfully.`,
       });
-    } catch (error) {
+    } catch (err) {
+      console.error("Failed to add question:", err);
       toast({
-        title: "Error",
-        description: "Failed to add question. Please try again.",
+        title: "Failed to add question",
+        description: "Please try again",
         variant: "destructive"
       });
     }
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image upload
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit (increased from 5MB)
-        toast({
-          title: "File too large",
-          description: "Image must be less than 10MB",
-          variant: "destructive"
-        });
-        return;
-      }
-      
       setQuestionImage(file);
-      const imageUrl = URL.createObjectURL(file);
-      setQuestionImagePreview(imageUrl);
+      setQuestionImagePreview(URL.createObjectURL(file));
     }
   };
-  
+
+  // Remove the image
   const handleRemoveImage = () => {
-    setQuestionImage(null);
     if (questionImagePreview) {
       URL.revokeObjectURL(questionImagePreview);
       setQuestionImagePreview(null);
@@ -314,21 +297,15 @@ const QuizCreation: React.FC = () => {
     }
   };
 
-  const resetForm = () => {
-    setQuestionText("");
-    setOptions(["", "", "", ""]);
-    setCorrectOption(0);
-    handleRemoveImage();
-  };
-
+  // Edit existing question
   const handleEditQuestion = (index: number) => {
     const question = questions[index];
-    setQuestionText(question.text);
+    setQuestionText(question.question);
     
     if (question.options) {
       setOptions(question.options as string[]);
       setCorrectOption((question.options as string[]).findIndex(
-        opt => opt === (question.correctAnswers as string[])[0]
+        opt => Array.isArray(question.correctAnswer) ? opt === question.correctAnswer[0] : opt === question.correctAnswer
       ));
     }
     
@@ -381,13 +358,13 @@ const QuizCreation: React.FC = () => {
         const prevQuestion = questions[prevIndex];
         
         // Load the question data into the form
-        setQuestionText(prevQuestion.text);
+        setQuestionText(prevQuestion.question);
         
         if (prevQuestion.options) {
           setOptions(prevQuestion.options as string[]);
           // Find which option is the correct one
           const correctIndex = (prevQuestion.options as string[]).findIndex(
-            opt => (prevQuestion.correctAnswers as string[]).includes(opt)
+            opt => Array.isArray(prevQuestion.correctAnswer) ? prevQuestion.correctAnswer.includes(opt) : opt === prevQuestion.correctAnswer
           );
           setCorrectOption(correctIndex >= 0 ? correctIndex : 0);
         }
@@ -412,13 +389,6 @@ const QuizCreation: React.FC = () => {
       }
     }
   };
-
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < questions.length) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-    }
-  };
-
   const handleFinishQuiz = async () => {
     // First validate the creator name is present and was entered by user
     if (!creatorName.trim()) {
@@ -485,27 +455,6 @@ const QuizCreation: React.FC = () => {
       });
     }
   };
-
-  // Calculate how many questions have been completed
-  const completedQuestions = questions.length;
-  
-  // Handle name confirmation
-  const handleConfirmName = () => {
-    if (creatorName.trim()) {
-      setIsNameConfirmed(true);
-      toast({
-        title: "Name confirmed",
-        description: `Your quiz will be created with the name "${creatorName}"`,
-      });
-    } else {
-      toast({
-        title: "Name required",
-        description: "Please enter your name before confirming",
-        variant: "destructive"
-      });
-    }
-  };
-
   // Render the form
   return (
     <Layout>
@@ -513,7 +462,7 @@ const QuizCreation: React.FC = () => {
         Create Your Quiz
       </h1>
       
-      <Card key={mountId} className="mb-6">
+      <Card key={uniqueId} className="mb-6">
         <CardContent className="pt-6">
           {/* No name display - using name from homepage */}
           
@@ -581,7 +530,7 @@ const QuizCreation: React.FC = () => {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={handleImageChange}
+                    onChange={handleFileChange}
                   />
                 </div>
               )}
