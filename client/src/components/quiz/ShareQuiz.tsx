@@ -8,6 +8,15 @@ import { useToast } from "@/hooks/use-toast";
 import Layout from "../common/Layout";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Input } from "@/components/ui/input";
+import { apiRequest } from "@/lib/api";
+
+interface Quiz {
+  id: string;
+  creatorName: string;
+  urlSlug: string;
+  accessCode: string;
+  dashboardToken?: string;
+}
 
 interface ShareQuizProps {
   quizId: string;
@@ -20,85 +29,78 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
   const [copied, setCopied] = useState(false);
   const [copiedDashboard, setCopiedDashboard] = useState(false);
   
-  // Custom query to get the quiz with dashboard token
-  // Explicitly disable cache, set immediate as high priority
-  const { data: quiz, isLoading, error } = useQuery<any>({
-    queryKey: [`/api/quizzes/${quizId}`],
-    staleTime: 0, // Always consider data stale
-    refetchOnMount: "always", // Always refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window regains focus
-    retry: 3, // Retry failed requests 3 times
-    retryDelay: 1000, // Wait 1 second between retries
-    refetchInterval: false, // Don't automatically refetch at intervals
-    networkMode: "always" // Always try to fetch, even if network may be down
+  // Get quiz data with proper typing and error handling
+  const { data: quiz, isLoading, error } = useQuery<Quiz>({
+    queryKey: ['quiz', quizId],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest("GET", `/api/quizzes/${quizId}`);
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error("Error fetching quiz:", error);
+        throw error;
+      }
+    },
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 0
   });
-  
-  // Get the dashboard token from the API response or from sessionStorage as a fallback
+
+  // Get the dashboard token from API response or session storage
   const dashboardToken = quiz?.dashboardToken || sessionStorage.getItem("currentQuizDashboardToken");
-  console.log("Dashboard token from API:", quiz?.dashboardToken);
-  console.log("Dashboard token from sessionStorage:", sessionStorage.getItem("currentQuizDashboardToken"));
-  
-  // Save the dashboard token to sessionStorage whenever we get it from the API
-  useEffect(() => {
-    if (quiz?.dashboardToken) {
-      console.log("Saving dashboard token to sessionStorage:", quiz.dashboardToken);
-      sessionStorage.setItem("currentQuizDashboardToken", quiz.dashboardToken);
-    }
-  }, [quiz?.dashboardToken]);
-  
-  // Use the custom domain for sharing
-  const customDomain = "https://qzonme.com";
+
+  // Use a custom domain for sharing
+  const customDomain = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://qzonme.com';
   const quizLink = `${customDomain}/quiz/${urlSlug}`;
-  const shareMessage = `Hey! I made this QzonMe quiz just for YOU. 👀\nLet's see if you really know me 👇\n${quizLink}`;
-  
-  const dashboardLink = dashboardToken ? `${customDomain}/dashboard/${dashboardToken}` : null;
-  
-  // Format expiration date (7 days from today)
-  const expirationDate = new Date();
-  expirationDate.setDate(expirationDate.getDate() + 7);
-  const formattedExpirationDate = expirationDate.toLocaleDateString('en-US', {
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric'
-  });
-  
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(shareMessage);
-    setCopied(true);
-    toast({
-      title: "Copied!",
-      description: "Now paste it to your friend 👌🏽",
-      duration: 3000
-    });
-    setTimeout(() => setCopied(false), 3000);
-  };
-  
-  const handleCopyDashboardLink = () => {
-    // Use either the API response or the fallback from sessionStorage
-    if (!dashboardToken) {
+  const dashboardLink = dashboardToken ? `${customDomain}/dashboard/${dashboardToken}` : '';
+
+  // Handle copying quiz link
+  const handleCopyQuizLink = async () => {
+    try {
+      await navigator.clipboard.writeText(quizLink);
+      setCopied(true);
       toast({
-        title: "Error",
-        description: "Could not find dashboard token. Please try refreshing the page.",
+        title: "Link copied!",
+        description: "Share it with your friends",
+        duration: 3000
+      });
+      setTimeout(() => setCopied(false), 3000);
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      toast({
+        title: "Failed to copy",
+        description: "Please try copying manually",
         variant: "destructive"
       });
-      return;
     }
-    
-    navigator.clipboard.writeText(dashboardLink || "");
-    
-    setCopiedDashboard(true);
-    toast({
-      title: "Dashboard link copied!",
-      description: "Make sure to bookmark it as you'll need it to view results.",
-      duration: 3000
-    });
-    setTimeout(() => setCopiedDashboard(false), 3000);
   };
-  
+
+  // Handle copying dashboard link
+  const handleCopyDashboardLink = async () => {
+    if (!dashboardLink) return;
+    try {
+      await navigator.clipboard.writeText(dashboardLink);
+      setCopiedDashboard(true);
+      toast({
+        title: "Dashboard link copied!",
+        description: "Make sure to bookmark it as you'll need it to view results.",
+        duration: 3000
+      });
+      setTimeout(() => setCopiedDashboard(false), 3000);
+    } catch (error) {
+      console.error("Failed to copy dashboard link:", error);
+      toast({
+        title: "Failed to copy",
+        description: "Please try copying manually",
+        variant: "destructive"
+      });
+    }
+  };
+
+  // Handle viewing dashboard
   const handleViewDashboard = () => {
-    // Use either the API response or the fallback from sessionStorage
     if (dashboardToken) {
-      console.log("Navigating to dashboard with token:", dashboardToken);
       navigate(`/dashboard/${dashboardToken}`);
     } else {
       toast({
@@ -108,7 +110,34 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
       });
     }
   };
-  
+
+  if (isLoading) {
+    return (
+      <Layout>
+        <div className="flex justify-center items-center min-h-[60vh]">
+          <div className="text-center">
+            <div className="spinner mb-4"></div>
+            <p>Loading quiz details...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (error) {
+    return (
+      <Layout>
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Error Loading Quiz</AlertTitle>
+          <AlertDescription>
+            Failed to load quiz details. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <Card className="text-center">
@@ -117,101 +146,62 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
             <Check className="h-8 w-8 text-primary" />
           </div>
           
-          <h2 className="text-2xl font-bold mb-4 font-poppins">Your Quiz is Ready!</h2>
+          <h1 className="text-2xl font-bold mb-2">Quiz Created Successfully!</h1>
           <p className="text-muted-foreground mb-6">
-            Share this link with your friends to see how well they know you.
+            Your quiz is ready to share with friends
           </p>
-          
-          {/* Expiration Alert */}
-          <Alert variant="destructive" className="mb-6 border-amber-500 bg-amber-50 text-amber-700">
-            <AlertTriangle className="h-4 w-4 text-amber-600" />
-            <AlertTitle>Your quiz will expire in 7 days</AlertTitle>
-            <AlertDescription>
-              🕒 <strong>Note:</strong> This quiz and its dashboard will remain active for 7 days from today (until {formattedExpirationDate}).
-              After that, the links will expire and no longer be accessible.
-            </AlertDescription>
-          </Alert>
-          
-          {/* Share Box - Same style as in Results page */}
-          <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 mb-6">
-            <h3 className="font-poppins font-semibold text-lg mb-2 text-left">Share This Quiz</h3>
-            <p className="text-sm text-gray-600 mb-3 text-left">
-              Copy this message to invite your friends to take your quiz!
-            </p>
-            <div className="bg-white p-3 rounded border border-gray-200 text-sm mb-3 text-left">
-              Hey! I made this QzonMe quiz just for YOU. 👀<br/>
-              Let's see if you really know me 👇<br/>
-              <span className="text-blue-500 truncate block">{quizLink}</span>
+
+          <div className="space-y-6">
+            {/* Quiz Link Section */}
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Share Your Quiz</h2>
+              <div className="flex gap-2 mb-2">
+                <Input value={quizLink} readOnly />
+                <Button onClick={handleCopyQuizLink}>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              
+              {/* Share buttons */}
+              <div className="flex justify-center gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(quizLink)}`, '_blank')}
+                >
+                  Share on WhatsApp
+                </Button>
+              </div>
             </div>
-            <Button 
-              type="button" 
-              className="w-full" 
-              onClick={handleCopyLink}
-              disabled={copied}
-            >
-              {copied ? "Copied!" : (
-                <>
-                  <Copy className="h-4 w-4 mr-2" /> Copy Message
-                </>
-              )}
-            </Button>
+
+            {/* Dashboard Section */}
+            <div>
+              <h2 className="text-lg font-semibold mb-2">Your Quiz Dashboard</h2>
+              <p className="text-muted-foreground text-sm mb-4">
+                Use your dashboard to view quiz results and rankings
+              </p>
+              
+              <div className="flex gap-2 mb-4">
+                <Input value={dashboardLink} readOnly />
+                <Button onClick={handleCopyDashboardLink}>
+                  {copiedDashboard ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              
+              <Button onClick={handleViewDashboard} className="w-full">
+                <BarChart className="h-4 w-4 mr-2" />
+                View Dashboard
+              </Button>
+            </div>
+
+            {/* Quiz Expiry Warning */}
+            <Alert>
+              <Clock className="h-4 w-4" />
+              <AlertTitle>Quiz Active for 7 Days</AlertTitle>
+              <AlertDescription className="text-sm">
+                Make sure to save your dashboard link to check results
+              </AlertDescription>
+            </Alert>
           </div>
-          
-          {/* Dashboard Link Box */}
-          <div className="p-4 border border-gray-200 rounded-lg bg-gray-50 mb-6">
-            <h3 className="font-poppins font-semibold text-lg mb-2 text-left flex items-center">
-              <Bookmark className="h-4 w-4 mr-2 text-primary" /> Your Dashboard Link
-            </h3>
-            <p className="text-sm text-gray-600 mb-3 text-left">
-              <strong>Important:</strong> This is your unique dashboard link. Please bookmark or save it as it won't be stored in your browser.
-            </p>
-            
-            {/* Display dashboard link from either API response or sessionStorage fallback */}
-            {dashboardToken ? (
-              <div className="mb-3">
-                <div className="flex space-x-2 mb-2">
-                  <Input 
-                    value={`${customDomain}/dashboard/${dashboardToken}`}
-                    readOnly
-                    className="bg-white"
-                  />
-                  <Button
-                    type="button"
-                    onClick={handleCopyDashboardLink}
-                    disabled={copiedDashboard}
-                  >
-                    {copiedDashboard ? "Copied!" : <Copy className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-            ) : isLoading ? (
-              <div className="bg-white p-3 rounded border border-gray-200 text-sm mb-3 text-center">
-                Loading dashboard link...
-              </div>
-            ) : error ? (
-              <div className="bg-red-50 p-3 rounded border border-red-200 text-sm text-red-700 mb-3 text-center">
-                Error loading dashboard link. Please refresh the page.
-              </div>
-            ) : (
-              <div className="bg-orange-50 p-3 rounded border border-orange-200 text-sm text-orange-700 mb-3 text-center">
-                Dashboard token not found. Please try creating another quiz.
-              </div>
-            )}
-            
-            <Button 
-              type="button" 
-              className="w-full" 
-              onClick={handleViewDashboard}
-              disabled={isLoading || (!dashboardToken)}
-            >
-              <BarChart className="h-4 w-4 mr-2" /> View My Dashboard
-            </Button>
-          </div>
-          
-          <p className="text-sm text-muted-foreground mt-4">
-            <Clock className="h-3 w-3 inline-block mr-1" /> 
-            Remember: You can only access your dashboard using the link above.
-          </p>
         </CardContent>
       </Card>
     </Layout>
