@@ -61,7 +61,7 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
     console.log("Using session storage fallback for quiz data");
     return (
       <ShareQuiz
-        accessCode={sessionQuizAccessCode}
+        quizId={quizId}
         quizId={quizId}
         urlSlug={sessionQuizUrlSlug}
       />
@@ -102,7 +102,7 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
       />
       
       <ShareQuiz
-        accessCode={quizData.accessCode}
+        quizId={quizData.id}
         quizId={quizId}
         urlSlug={quizData.urlSlug}
       />

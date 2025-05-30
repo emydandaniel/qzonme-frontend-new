@@ -196,7 +196,7 @@ const Dashboard: React.FC<DashboardProps> = ({ params }) => {
   }
 
   if (showShareView) {
-    return <ShareQuiz accessCode={quiz.accessCode} quizId={quiz.id} urlSlug={quiz.urlSlug} />;
+    return <ShareQuiz quizId={quiz.id} urlSlug={quiz.urlSlug} />;
   }
 
   console.log("Dashboard rendering with attempts:", attempts);

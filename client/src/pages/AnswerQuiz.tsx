@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { QuestionAnswer, Quiz, Question } from "@/lib/schema";
 import QuizAnswer from "@/components/quiz/QuizAnswer";
-import { calculateScore } from "@/lib/quizUtils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/common/Layout";
