@@ -26,8 +26,7 @@ export default defineConfig({
         },
       },
     },
-  },
-  server: {
+  },  server: {
     port: 3000,
     proxy: {
       '/api': {
@@ -36,5 +35,4 @@ export default defineConfig({
       },
     },
   },
-  base: '/',
 })

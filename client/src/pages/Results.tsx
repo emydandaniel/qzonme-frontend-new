@@ -102,8 +102,8 @@ const Results: React.FC<ResultsProps> = ({ params }) => {
     queryKey: [`/api/quizzes/${quizId}/questions`],
     enabled: !!quizId,
   });
-
-  // Fetch quiz attempts with aggressive refetching strategy  const { 
+  // Fetch quiz attempts with aggressive refetching strategy
+  const { 
     data: attempts = [], 
     isLoading: isLoadingAttempts
   } = useQuery<any[]>({

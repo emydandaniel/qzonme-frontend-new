@@ -59,9 +59,7 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
   // If quiz from API failed but we have session data, use that
   if (!quiz && sessionQuizId && sessionQuizId === params.quizId && sessionQuizAccessCode && sessionQuizUrlSlug) {
     console.log("Using session storage fallback for quiz data");
-    return (
-      <ShareQuiz
-        quizId={quizId}
+    return (      <ShareQuiz
         quizId={quizId}
         urlSlug={sessionQuizUrlSlug}
       />
@@ -102,7 +100,6 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
       />
       
       <ShareQuiz
-        quizId={quizData.id}
         quizId={quizId}
         urlSlug={quizData.urlSlug}
       />
