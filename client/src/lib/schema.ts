@@ -38,4 +38,5 @@ export interface Quiz {
   urlSlug: string;
   dashboardToken: string;
   createdAt: string;
+  expiresAt: string;
 }

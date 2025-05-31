@@ -104,8 +104,7 @@ const QuizCreation: React.FC = () => {
   const questionsNeeded = Math.max(0, requiredQuestionsCount - questions.length);
   
   // Image upload mutation
-  const uploadImageMutation = useMutation({
-    mutationFn: async (file: File) => {
+  const uploadImageMutation = useMutation({    mutationFn: async (file: File) => {
       try {
         console.log("Starting image upload...");
         const formData = new FormData();
@@ -120,17 +119,24 @@ const QuizCreation: React.FC = () => {
           credentials: 'include',
         });
         
+        const result = await response.json();
+        
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error("Image upload failed:", errorText);
-          throw new Error(`Failed to upload image: ${response.status} ${errorText}`);
+          // Handle specific error codes
+          switch (result.code) {
+            case 'MISSING_FILE':
+              throw new Error('Please select an image file to upload');
+            case 'FILE_TOO_LARGE':
+              throw new Error('Image file is too large (max 10MB)');
+            default:
+              throw new Error(result.message || 'Failed to upload image');
+          }
         }
         
-        const result = await response.json();
         console.log("Image upload successful:", result);
         return result;
       } catch (error) {
-        console.error("Error uploading image:", error);
+        console.error("Error uploading image:", error instanceof Error ? error.message : error);
         throw error;
       }
     }
@@ -246,17 +252,28 @@ const QuizCreation: React.FC = () => {
       if (editingImageUrl) {
         console.log("Using existing image URL from edit:", editingImageUrl);
         imageUrl = editingImageUrl;
-      }
-      // Otherwise, upload the new image if one is selected
+      }      // Otherwise, upload the new image if one is selected
       else if (questionImage) {
         try {
           const uploadResult = await uploadImageMutation.mutateAsync(questionImage);
           imageUrl = uploadResult.imageUrl;
         } catch (error) {
-          console.error("Failed to upload image:", error);
+          const errorMessage = error instanceof Error ? error.message : 'Failed to upload image';
+          console.error("Image upload failed:", error);
+          
+          // Ask user if they want to continue without the image
+          if (!confirm("The image upload failed. Would you like to add the question without an image?")) {
+            toast({
+              title: "Question Not Added",
+              description: "Please try uploading the image again or continue without an image",
+              variant: "destructive"
+            });
+            return;
+          }
+          
           toast({
             title: "Image Upload Failed",
-            description: "Your question will be added without the image",
+            description: errorMessage,
             variant: "destructive"
           });
         }

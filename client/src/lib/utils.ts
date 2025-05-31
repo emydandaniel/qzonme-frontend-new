@@ -117,3 +117,9 @@ export function isQuizExpired(createdAt: string): boolean {
   const expirationDate = new Date(creationDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
   return new Date() > expirationDate;
 }
+
+export const QUIZ_EXPIRY_MESSAGES = {
+  expired: "This quiz has expired after the 7-day limit and is no longer accessible.",
+  warning: "This quiz will expire 7 days after creation. After this date, the quiz and all associated data will be deleted.",
+  detail: "All quizzes are automatically removed after 7 days to maintain data privacy and keep content fresh."
+};

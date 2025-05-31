@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import DashboardView from "@/components/quiz/Dashboard";
 import ShareQuiz from "@/components/quiz/ShareQuiz";
 import { Question, QuizAttempt, Quiz } from "@/lib/schema";
+import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Clock } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card"; 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { isQuizExpired, QUIZ_EXPIRY_MESSAGES } from '@/lib/utils';
 
 interface DashboardProps {
   params: {
@@ -13,209 +15,140 @@ interface DashboardProps {
   };
 }
 
+// Response type for attempts API
+interface AttemptsResponse {
+  data: QuizAttempt[];
+  serverTime: number;
+}
+
+const REFRESH_INTERVAL = 30000; // 30 seconds
+
 const Dashboard: React.FC<DashboardProps> = ({ params }) => {
   const { token } = params;
   const queryClient = useQueryClient();
   const [showShareView, setShowShareView] = React.useState(false);
 
-  // We no longer want to show the share view when coming to dashboard
-  // The share view is only shown after quiz creation
-  React.useEffect(() => {
-    setShowShareView(false);
-  }, [params.token]);
-
-  // Fetch quiz by token
+  // Fetch quiz with proper error handling and expiry check
   const { 
     data: quiz, 
     isLoading: isLoadingQuiz,
     error: quizError
   } = useQuery<Quiz>({
     queryKey: [`/api/quizzes/dashboard/${token}`],
-  });
-
-  // Use the quizId from the fetched quiz for subsequent queries
-  const quizId = quiz?.id;
-
-  // Fetch questions once we have the quizId
-  const { data: questions = [], isLoading: isLoadingQuestions } = useQuery<Question[]>({
-    queryKey: [`/api/quizzes/${quizId}/questions`],
-    enabled: !!quizId,
-  });
-  
-  // Use direct state management instead of React Query for attempts data
-  const [attempts, setAttempts] = React.useState<QuizAttempt[]>([]);
-  const [isLoadingAttempts, setIsLoadingAttempts] = React.useState(true);
-  
-  // Direct fetch function that bypasses all caching mechanisms
-  const fetchAttemptsDirectly = React.useCallback(async () => {
-    if (!quizId) return;
-    
-    try {
-      console.log("Dashboard: Direct fetch attempts");
-      setIsLoadingAttempts(true);
-      
-      // Clear React Query cache for this endpoint before fetching
-      queryClient.removeQueries({ queryKey: [`/api/quizzes/${quizId}/attempts`] });
-      
-      // Add cache busting parameters and headers
-      const cacheBuster = Date.now();
-      const response = await fetch(`/api/quizzes/${quizId}/attempts?t=${cacheBuster}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/quizzes/dashboard/${token}`);
       if (!response.ok) {
-        throw new Error('Failed to fetch attempts');
+        throw new Error("Failed to load quiz");
       }
-      
-      // Get data and handle the new response format
-      const attemptsData = await response.json();
-      
-      // Extract the attempts array from whatever format the server returns
-      const attemptsList = attemptsData.data || attemptsData;
-      const serverTime = attemptsData.serverTime || Date.now();
-      
-      console.log(`Directly fetched ${attemptsList.length} attempts at ${new Date(serverTime).toISOString()}`);
-      
-      // Update state with fresh data
-      setAttempts(attemptsList);
-      setIsLoadingAttempts(false);
-    } catch (error) {
-      console.error('Error directly fetching attempts:', error);
-      setIsLoadingAttempts(false);
-    }
-  }, [quizId, queryClient]);
-  
-  // Set up regular direct fetching
+      return response.json();
+    },
+    refetchInterval: REFRESH_INTERVAL
+  });
+
+  // Fetch questions with proper caching
+  const { 
+    data: questions = [], 
+    isLoading: isLoadingQuestions 
+  } = useQuery<Question[]>({
+    queryKey: [`/api/quizzes/${quiz?.id}/questions`],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/quizzes/${quiz?.id}/questions`);
+      if (!response.ok) {
+        throw new Error("Failed to load questions");
+      }
+      return response.json();
+    },
+    enabled: !!quiz?.id,
+    staleTime: REFRESH_INTERVAL
+  });
+
+  // Fetch attempts with real-time updates
+  const { 
+    data: attempts = [], 
+    isLoading: isLoadingAttempts,
+    refetch: refetchAttempts 
+  } = useQuery<QuizAttempt[]>({
+    queryKey: [`/api/quizzes/${quiz?.id}/attempts`],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/quizzes/${quiz?.id}/attempts`);
+      if (!response.ok) {
+        throw new Error("Failed to load attempts");
+      }
+      const data: AttemptsResponse | QuizAttempt[] = await response.json();
+      return Array.isArray(data) ? data : data.data;
+    },
+    enabled: !!quiz?.id,
+    refetchInterval: REFRESH_INTERVAL
+  });
+
+  // Refetch attempts when the window regains focus
   React.useEffect(() => {
-    if (!quizId) return;
-    
-    // Fetch immediately
-    fetchAttemptsDirectly();
-    
-    // Set up interval for much less frequent refreshes
-    const refreshInterval = setInterval(fetchAttemptsDirectly, 30000); // Every 30 seconds
-    
-    // Return cleanup function
-    return () => {
-      clearInterval(refreshInterval);
+    const onFocus = () => {
+      if (quiz?.id) {
+        refetchAttempts();
+      }
     };
-  }, [quizId, fetchAttemptsDirectly]);
 
-  // Set up a much less frequent hard reload effect (completely separate from the data fetching)
-  React.useEffect(() => {
-    if (!quizId) return;
-    
-    // Function for hard page reload - only used very occasionally
-    const forcePageReload = () => {
-      console.log("FORCE RELOAD: Dashboard page will refresh completely");
-      // Add cache busting parameter to reload fresh - this is the nuclear option
-      window.location.href = `${window.location.pathname}?t=${Date.now()}`;
-    };
-    
-    // Schedule a hard reload every 5 minutes - much less frequent
-    const reloadIntervalId = setInterval(forcePageReload, 300000); // 5 minutes
-    
-    return () => {
-      clearInterval(reloadIntervalId);
-    };
-  }, [quizId]);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [quiz?.id, refetchAttempts]);
 
-  // Format expiration date if we have a quiz
-  const formatExpirationDate = (createdAtString: string | Date) => {
-    const createdAt = new Date(createdAtString);
-    const expirationDate = new Date(createdAt);
-    expirationDate.setDate(expirationDate.getDate() + 7);
-    
-    return expirationDate.toLocaleDateString('en-US', {
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric'
-    });
-  };
-
-  // Check if quiz has expired (7 days after creation)
-  const isQuizExpired = (createdAtString: string | Date) => {
-    const createdAt = new Date(createdAtString);
-    const expirationDate = new Date(createdAt);
-    expirationDate.setDate(expirationDate.getDate() + 7);
-    
-    return new Date() > expirationDate;
-  };
-
-  if (isLoadingQuiz || (quizId && (isLoadingQuestions || isLoadingAttempts))) {
+  // Show loading state
+  if (isLoadingQuiz || isLoadingQuestions) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="flex items-center justify-center p-6 min-h-[200px]">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-              <p>Loading dashboard...</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="w-full max-w-4xl mx-auto mt-8">
+        <CardContent className="p-6">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-8 w-8 animate-spin" />
+          </div>
+        </CardContent>
+      </Card>
     );
   }
 
+  // Show error state
   if (quizError || !quiz) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-red-500 mb-2">Dashboard Not Found</h2>
-              <p>We couldn't find this dashboard. The token may be invalid or the quiz has expired.</p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="w-full max-w-4xl mx-auto mt-8">
+        <CardContent className="p-6">
+          <Alert variant="destructive">
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {quizError instanceof Error ? quizError.message : "Failed to load quiz"}
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     );
   }
 
-  // Check if the quiz has expired
-  if (isQuizExpired(quiz.createdAt)) {
+  // Show expired quiz state
+  if (quiz.expiresAt && isQuizExpired(quiz.expiresAt)) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <Card>
-          <CardContent className="p-6">
-            <div className="text-center">
-              <h2 className="text-xl font-bold text-orange-500 mb-2">Quiz Expired</h2>
-              <p>This quiz has expired after the 7-day limit and is no longer accessible.</p>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Quizzes are automatically removed 7 days after creation to keep the platform fresh.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="w-full max-w-4xl mx-auto mt-8">
+        <CardContent className="p-6">
+          <Alert>
+            <Clock className="h-4 w-4" />
+            <AlertTitle>Quiz Expired</AlertTitle>
+            <AlertDescription>{QUIZ_EXPIRY_MESSAGES.expired}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
     );
-  }  if (showShareView) {
-    return <ShareQuiz quizId={quiz.id.toString()} urlSlug={quiz.urlSlug} creatorName={quiz.creatorName} />;
   }
 
-  console.log("Dashboard rendering with attempts:", attempts);
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Expiration Warning */}
-      <Alert variant="default" className="mb-6 border-amber-500 bg-amber-50 text-amber-700">
-        <Clock className="h-4 w-4 text-amber-600" />
-        <AlertTitle>Quiz Expiration</AlertTitle>
-        <AlertDescription>
-          This quiz will expire on {formatExpirationDate(quiz.createdAt)}. After this date, 
-          the quiz and dashboard will no longer be accessible.
-        </AlertDescription>
-      </Alert>
-        <DashboardView
-        quizId={quiz.id}
-        questions={questions}
-        attempts={attempts}
-      />
-    </div>
+  return showShareView ? (
+    <ShareQuiz 
+      quizId={quiz.id.toString()}
+      urlSlug={quiz.urlSlug}
+      creatorName={quiz.creatorName}
+    />
+  ) : (
+    <DashboardView 
+      quizId={quiz.id}
+      questions={questions}
+      attempts={attempts}
+    />
   );
 };
 
