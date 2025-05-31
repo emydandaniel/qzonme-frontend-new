@@ -28,13 +28,16 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [copiedDashboard, setCopiedDashboard] = useState(false);
-  
+
   // Get quiz data with proper typing and error handling
   const { data: quiz, isLoading, error } = useQuery<Quiz>({
     queryKey: ['quiz', quizId],
     queryFn: async () => {
       try {
         const response = await apiRequest("GET", `/api/quizzes/${quizId}`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch quiz: ${response.statusText}`);
+        }
         const data = await response.json();
         return data;
       } catch (error) {
@@ -47,8 +50,10 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
     staleTime: 0
   });
 
-  // Get the dashboard token from API response or session storage
+  // Get dashboard token and other data from multiple sources
   const dashboardToken = quiz?.dashboardToken || sessionStorage.getItem("currentQuizDashboardToken");
+  const accessCode = quiz?.accessCode || sessionStorage.getItem("currentQuizAccessCode");
+  const creatorName = quiz?.creatorName || sessionStorage.getItem("currentCreatorName");
 
   // Use a custom domain for sharing
   const customDomain = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://qzonme.com';
@@ -201,6 +206,16 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
                 Make sure to save your dashboard link to check results
               </AlertDescription>
             </Alert>
+
+            {/* Access Code Display */}
+            {accessCode && (
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-2">Quiz Access Code:</p>
+                <code className="bg-muted px-3 py-1 rounded text-lg font-mono">
+                  {accessCode}
+                </code>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

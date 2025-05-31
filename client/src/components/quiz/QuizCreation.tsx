@@ -400,8 +400,6 @@ const QuizCreation: React.FC = () => {
       return;
     }
     
-    // Name is already confirmed from homepage
-    
     // Then validate the quiz has enough questions
     if (!validateQuiz(questions)) {
       toast({
@@ -418,6 +416,7 @@ const QuizCreation: React.FC = () => {
       sessionStorage.removeItem("currentQuizAccessCode");
       sessionStorage.removeItem("currentQuizUrlSlug");
       sessionStorage.removeItem("currentQuizDashboardToken");
+      sessionStorage.removeItem("currentCreatorName");
       
       console.log("Starting quiz creation with fresh data...");
       console.log(`Creator name (directly from form input): "${creatorName}"`);
@@ -428,13 +427,18 @@ const QuizCreation: React.FC = () => {
       console.log("Quiz creation successful!");
       console.log("Quiz ID:", quiz.id);
       console.log("Access Code:", quiz.accessCode);
-      console.log("URL Slug:", quiz.urlSlug, "- Generated from name:", creatorName);
+      console.log("URL Slug:", quiz.urlSlug);
       console.log("Dashboard Token:", quiz.dashboardToken);
-        // CRITICAL: Store these in session storage for the share page
+      
+      // Store quiz data in session storage for share page
       sessionStorage.setItem("currentQuizId", quiz.id);
       sessionStorage.setItem("currentQuizAccessCode", quiz.accessCode);
       sessionStorage.setItem("currentQuizUrlSlug", quiz.urlSlug);
       sessionStorage.setItem("currentQuizDashboardToken", quiz.dashboardToken);
+      sessionStorage.setItem("currentCreatorName", creatorName);
+
+      // Navigate to share page
+      navigate(`/share/${quiz.id}`);
       
       // Show success toast
       toast({
@@ -442,9 +446,6 @@ const QuizCreation: React.FC = () => {
         description: `Your quiz "${creatorName}'s Quiz" is ready to share`,
         variant: "default"
       });
-      
-      // Navigate to the share page
-      navigate(`/share/${quiz.id}`);
     } catch (error) {
       console.error("Failed to create quiz:", error);
       toast({
