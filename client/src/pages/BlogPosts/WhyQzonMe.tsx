@@ -60,8 +60,7 @@ const WhyQzonMe: React.FC = () => {
           <div className="mt-8 flex justify-between">
             <Link href="/blog">
               <Button variant="outline">Back to All Posts</Button>
-            </Link>
-            <Link href="/create">
+            </Link>            <Link href="/">
               <Button>Create Your Quiz Now</Button>
             </Link>
           </div>
