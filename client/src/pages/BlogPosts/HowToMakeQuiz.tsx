@@ -71,7 +71,7 @@ export default function HowToMakeQuiz() {
               <Link to="/blog">Back to Blog</Link>
             </Button>
             <Button asChild>
-              <Link to="/create">Create Your Quiz</Link>
+              <Link to="/">Create Your Quiz</Link>
             </Button>
           </div>
           </CardContent>

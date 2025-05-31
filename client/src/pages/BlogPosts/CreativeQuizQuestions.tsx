@@ -52,7 +52,7 @@ export default function CreativeQuizQuestions() {
               <Link to="/blog">Back to Blog</Link>
             </Button>
             <Button asChild>
-              <Link to="/create">Create Your Quiz</Link>
+              <Link to="/">Create Your Quiz</Link>
             </Button>
           </div>
           </CardContent>
