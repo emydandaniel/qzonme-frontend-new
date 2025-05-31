@@ -21,6 +21,7 @@ interface Quiz {
 interface ShareQuizProps {
   quizId: string;
   urlSlug: string;
+  creatorName?: string;
 }
 
 const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
