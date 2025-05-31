@@ -263,46 +263,32 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
             <div className="text-center mb-6">
               <h3 className="text-xl font-poppins font-semibold mb-2">
                 {currentQuestion.question}
-              </h3>
-                {/* Display question image if available with loading indicator */}
+              </h3>              {/* Display question image if available */}
               {currentQuestion.imageUrl && (
                 <div className="mt-3 mb-4 relative">
-                  {/* Loading placeholder - initially visible */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
                     <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
                       <p className="text-sm text-gray-500">Loading image...</p>
                     </div>
                   </div>
-                  
-                  {/* Actual image preload in background */}
                   <img 
                     src={currentQuestion.imageUrl} 
                     alt={`Question ${currentQuestionIndex + 1} image`}
-                    className="max-w-full max-h-64 mx-auto rounded-lg opacity-0 transition-opacity duration-200"
+                    className="max-w-full h-auto max-h-64 mx-auto rounded-lg relative z-10"
                     onLoad={(e) => {
-                      // Once loaded, hide placeholder and show image
                       const target = e.target as HTMLImageElement;
-                      const parent = target.parentElement;
-                      if (parent) {
-                        const placeholder = parent.firstElementChild;
-                        if (placeholder) {
-                          placeholder.classList.add('hidden');
-                        }
-                        target.classList.remove('opacity-0');
+                      if (target.parentElement?.firstElementChild) {
+                        target.parentElement.firstElementChild.className = "hidden";
                       }
                     }}
                     onError={(e) => {
-                      // Handle image load failure
                       const target = e.target as HTMLImageElement;
-                      const parent = target.parentElement;
-                      if (parent) {
-                        const placeholder = parent.firstElementChild as HTMLElement;
-                        if (placeholder) {
-                          placeholder.innerHTML = 'Failed to load image';
-                        }
+                      if (target.parentElement?.firstElementChild) {
+                        (target.parentElement.firstElementChild as HTMLElement).innerHTML = "Failed to load image";
                       }
                     }}
+                  />
                       if (parent && parent.firstElementChild) {
                         parent.firstElementChild.classList.add('hidden');
                       }
