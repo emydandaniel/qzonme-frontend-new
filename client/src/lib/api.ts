@@ -1,9 +1,9 @@
 // Get the API URL from environment variable, fallback to relative path if not set
-export const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+export const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 // Helper function to get the full API URL
 export function getApiUrl(path: string): string {
-  // Remove leading slash if present
+  // Remove leading slash if present since API_BASE_URL already includes /api
   const cleanPath = path.startsWith('/') ? path.slice(1) : path;
   return `${API_BASE_URL}/${cleanPath}`;
 }
