@@ -19,10 +19,13 @@ import { validateQuiz } from "@/lib/quizUtils";
 const QuizCreation: React.FC = () => {
   // Generate a unique mount ID for the component instance
   const uniqueId = React.useId();
-  
-  // Creator name from session storage
+    // Creator name from session storage
   const [creatorName, setCreatorName] = useState(() => {
     const savedUsername = sessionStorage.getItem("username") || "";
+    // If we have a saved username, create the user
+    if (savedUsername) {
+      createUserMutation.mutate(savedUsername);
+    }
     return savedUsername;
   });
   
@@ -129,6 +132,15 @@ const QuizCreation: React.FC = () => {
       
       return response.json();
     }
+  });
+
+  // User creation mutation
+  const createUserMutation = useMutation({
+    mutationFn: async (username: string) => {
+      const response = await apiRequest('POST', 'users', { username });
+      const data = await response.json();
+      return data;
+    },
   });
 
   const createQuizMutation = useMutation({
@@ -455,6 +467,27 @@ const QuizCreation: React.FC = () => {
       });
     }
   };
+
+  // Handle creator name change and create user
+  const handleCreatorNameChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newName = e.target.value;
+    setCreatorName(newName);
+    sessionStorage.setItem("username", newName);
+
+    if (newName.length >= 2) { // Only create user if name is at least 2 characters
+      try {
+        await createUserMutation.mutateAsync(newName);
+      } catch (error) {
+        console.error('Failed to create user:', error);
+        toast({
+          title: "Error",
+          description: "Failed to create user. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   // Render the form
   return (
     <Layout>

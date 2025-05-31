@@ -41,15 +41,18 @@ const HomePage: React.FC = () => {
 
   const createUserMutation = useMutation({
     mutationFn: async (name: string) => {
+      // Ensure proper error handling for user creation
       const response = await apiRequest("POST", "/api/users", { username: name });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(`Failed to create user: ${error}`);
+      }
       return response.json();
     },
   });
 
   const handleCreateQuiz = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // First scroll to the top of the page
     window.scrollTo(0, 0);
     
     // Clear any previous draft questions to start fresh
@@ -61,27 +64,29 @@ const HomePage: React.FC = () => {
         description: "Please enter your name to continue",
         variant: "destructive",
       });
-      // Focus on the user name input at the top
       document.getElementById('user-name')?.focus();
       return;
     }
     
     try {
+      // Create user and wait for successful response
       const user = await createUserMutation.mutateAsync(userName);
-      // Store user in session - ensure both variations are set to prevent issues
-      sessionStorage.setItem("username", userName); 
-      sessionStorage.setItem("userName", userName); // Set both versions for compatibility
-      sessionStorage.setItem("userId", user.id);
       
-      // Clear any local storage that might be interfering
+      // Store consistent user data in session storage
+      sessionStorage.setItem("username", userName);
+      sessionStorage.setItem("userName", userName);
+      sessionStorage.setItem("userId", user.id.toString());
+      
+      // Clear any interfering storage
       localStorage.removeItem("creatorName");
       
       // Navigate to quiz creation
       navigate("/create");
     } catch (error) {
+      console.error("Failed to create user:", error);
       toast({
         title: "Error",
-        description: "Failed to create user. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create user. Please try again.",
         variant: "destructive",
       });
     }

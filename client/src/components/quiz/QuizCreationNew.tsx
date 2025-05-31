@@ -15,6 +15,7 @@ import QuestionList from "./QuestionList";
 import AdPlaceholder from "../common/AdPlaceholder";
 // Remove Layout import to prevent duplicate headers/footers
 import { Question } from "@/lib/schema";
+import { getApiUrl } from '@/lib/api';
 
 import { nanoid } from 'nanoid';
 
@@ -32,27 +33,26 @@ const QuizCreation: React.FC = () => {
   // Get the username directly from session storage once
   React.useEffect(() => {
     // Check both possible keys from session storage
-    const username = sessionStorage.getItem("username") || sessionStorage.getItem("userName") || "";
-    console.log("Retrieved username from session:", username);
-    // Debug: List all session storage keys to verify what's available
-    console.log("All session storage items:", 
-      Object.keys(sessionStorage).map(key => {
-        return { key, value: sessionStorage.getItem(key) };
-      })
-    );
+    const username = sessionStorage.getItem("username");
+    const userId = sessionStorage.getItem("userId");
     
-    // Set the creator name from session storage
-    setCreatorName(username);
+    console.log("Retrieved user info from session:", { username, userId });
     
-    // Make sure we're getting the creator name right
-    if (!username) {
+    // Require both username and userId to continue
+    if (!username || !userId) {
+      console.error("Missing user info, redirecting to home");
       toast({
-        title: "Important",
-        description: "Please return to the home page and enter your name first",
+        title: "Please enter your name",
+        description: "Return to the home page and enter your name to create a quiz",
         variant: "destructive"
       });
+      navigate("/");
+      return;
     }
-  }, [toast]);
+    
+    // Set creator name from session storage
+    setCreatorName(username);
+  }, [navigate, toast]);
   
   // Question state
   const [questionText, setQuestionText] = useState("");
@@ -104,40 +104,24 @@ const QuizCreation: React.FC = () => {
   const questionsNeeded = Math.max(0, requiredQuestionsCount - questions.length);
   
   // Image upload mutation
-  const uploadImageMutation = useMutation({    mutationFn: async (file: File) => {
+  const uploadImageMutation = useMutation({
+    mutationFn: async (file: File) => {
       try {
         console.log("Starting image upload...");
         const formData = new FormData();
         formData.append("image", file);
         
-        const url = `${import.meta.env.VITE_API_URL}/api/upload-image`;
-        console.log("Uploading to:", url);
-        
-        const response = await fetch(url, {
-          method: "POST",
-          body: formData,
-          credentials: 'include',
-        });
-        
+        const response = await apiRequest('POST', 'upload-image', formData, true);
         const result = await response.json();
-        
-        if (!response.ok) {
-          // Handle specific error codes
-          switch (result.code) {
-            case 'MISSING_FILE':
-              throw new Error('Please select an image file to upload');
-            case 'FILE_TOO_LARGE':
-              throw new Error('Image file is too large (max 10MB)');
-            default:
-              throw new Error(result.message || 'Failed to upload image');
-          }
-        }
         
         console.log("Image upload successful:", result);
         return result;
       } catch (error) {
         console.error("Error uploading image:", error instanceof Error ? error.message : error);
-        throw error;
+        // Clear failed upload state
+        handleRemoveImage();
+        // Rethrow with user-friendly message
+        throw new Error(error instanceof Error ? error.message : 'Failed to upload image');
       }
     }
   });
@@ -147,47 +131,33 @@ const QuizCreation: React.FC = () => {
     mutationFn: async () => {
       // Validate quiz creator exists
       if (!creatorName) {
-        toast({
-          title: "Missing Creator",
-          description: "Please go back to the homepage and enter your name",
-          variant: "destructive"
-        });
         throw new Error("Creator name is missing");
       }
       
       // Validate quiz has enough questions
       if (questions.length < requiredQuestionsCount) {
-        toast({
-          title: "More Questions Needed",
-          description: `Please add ${questionsNeeded} more question(s)`,
-          variant: "destructive"
-        });
-        throw new Error("Not enough questions");
+        throw new Error(`Not enough questions, need ${questionsNeeded} more`);
       }
 
       try {
-        console.log("Creating quiz with name:", creatorName);
-        
-        // Generate fresh tokens and codes
+        // Generate tokens and codes
         const accessCode = generateAccessCode();
         const dashboardToken = generateDashboardToken();
         const urlSlug = generateUrlSlug(creatorName);
         
-        // Store tokens in session storage for immediate access
-        sessionStorage.setItem("currentQuizDashboardToken", dashboardToken);
-        sessionStorage.setItem("currentQuizAccessCode", accessCode);
-        sessionStorage.setItem("currentQuizUrlSlug", urlSlug);
-        
-        // Generate a unique quiz id
-        const quizId = nanoid();
+        // Get required IDs
+        const userId = sessionStorage.getItem("userId");
+        if (!userId) {
+          throw new Error("User ID not found");
+        }
         
         // Create the quiz
-        console.log("Sending quiz creation request...");
+        console.log("Creating quiz:", { creatorName, userId });
         const quizResponse = await apiRequest("POST", "/api/quizzes", {
-          id: quizId,
           title: `${creatorName}'s Quiz`,
           description: `A quiz for ${creatorName}`,
           creatorName,
+          creatorId: parseInt(userId),
           accessCode,
           urlSlug,
           dashboardToken
@@ -199,10 +169,8 @@ const QuizCreation: React.FC = () => {
         }
         
         const quiz = await quizResponse.json();
-        console.log("Quiz created successfully:", quiz);
         
-        // Create all questions for the quiz
-        console.log("Creating questions...");
+        // Create all questions
         const questionPromises = questions.map((question, index) =>
           apiRequest("POST", "/api/questions", {
             ...question,
@@ -212,7 +180,6 @@ const QuizCreation: React.FC = () => {
         );
         
         await Promise.all(questionPromises);
-        console.log("All questions created successfully");
         
         return quiz;
       } catch (error) {
@@ -315,32 +282,55 @@ const QuizCreation: React.FC = () => {
     }
   };
 
-  // Handle image selection
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle image selection and validation
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
+      // Validate file size (10MB limit)
+      if (file.size > 10 * 1024 * 1024) {
         toast({
           title: "File Too Large",
-          description: "Image must be less than 10MB",
+          description: "Image must be less than 10MB for the best quiz experience",
           variant: "destructive"
         });
         return;
       }
-      
-      setQuestionImage(file);
-      const imageUrl = URL.createObjectURL(file);
-      setQuestionImagePreview(imageUrl);
+
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast({
+          title: "Invalid File Type",
+          description: "Please select an image file (PNG, JPG, or GIF)",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      try {
+        setQuestionImage(file);
+        // Create a local preview immediately for better UX
+        const imageUrl = URL.createObjectURL(file);
+        setQuestionImagePreview(imageUrl);
+      } catch (error) {
+        console.error("Error handling image:", error);
+        toast({
+          title: "Image Processing Failed",
+          description: "Please try another image or skip adding an image",
+          variant: "destructive"
+        });
+        handleRemoveImage();
+      }
     }
   };
   
-  // Handle removing an image
+  // Cleanup image resources
   const handleRemoveImage = () => {
-    setQuestionImage(null);
-    if (questionImagePreview) {
+    if (questionImagePreview && !questionImagePreview.startsWith('http')) {
       URL.revokeObjectURL(questionImagePreview);
-      setQuestionImagePreview(null);
     }
+    setQuestionImagePreview(null);
+    setQuestionImage(null);
+    setEditingImageUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -400,7 +390,7 @@ const QuizCreation: React.FC = () => {
   // Finish quiz creation
   const handleFinishQuiz = async () => {
     try {
-      // Validate quiz has enough questions
+      // Validate requirements
       if (questions.length < requiredQuestionsCount) {
         toast({
           title: "More Questions Needed",
@@ -410,13 +400,30 @@ const QuizCreation: React.FC = () => {
         return;
       }
 
+      if (!creatorName || !sessionStorage.getItem("userId")) {
+        toast({
+          title: "User Info Missing",
+          description: "Please return to homepage and enter your name",
+          variant: "destructive"
+        });
+        navigate("/");
+        return;
+      }
+
       // Create the quiz
       const quiz = await createQuizMutation.mutateAsync();
       
       // Clear saved questions from localStorage
       localStorage.removeItem('qzonme_draft_questions');
       
-      // Navigate to share page with the quiz ID
+      // Store quiz data in session for share page
+      sessionStorage.setItem("currentQuizId", quiz.id.toString());
+      sessionStorage.setItem("currentQuizAccessCode", quiz.accessCode);
+      sessionStorage.setItem("currentQuizUrlSlug", quiz.urlSlug);
+      sessionStorage.setItem("currentQuizDashboardToken", quiz.dashboardToken);
+      sessionStorage.setItem("currentCreatorName", creatorName);
+      
+      // Navigate to share page
       navigate(`/share/${quiz.id}`);
       
       // Show success toast
@@ -428,7 +435,7 @@ const QuizCreation: React.FC = () => {
       console.error("Error creating quiz:", error);
       toast({
         title: "Error",
-        description: "Failed to create quiz. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to create quiz. Please try again.",
         variant: "destructive"
       });
     }

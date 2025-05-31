@@ -12,20 +12,20 @@ export function getApiUrl(path: string): string {
 export async function apiRequest(
   method: string,
   path: string,
-  data?: unknown
+  data?: unknown,
+  isFormData: boolean = false
 ): Promise<Response> {
   try {
     const url = getApiUrl(path);
     console.log(`Making ${method} request to:`, url);
 
-    const headers: HeadersInit = {
+    const headers: HeadersInit = isFormData ? {} : {
       'Content-Type': 'application/json',
     };
 
     const response = await fetch(url, {
       method,
-      headers,
-      body: data ? JSON.stringify(data) : undefined,
+      headers,      body: isFormData ? data as FormData : data ? JSON.stringify(data) : undefined,
       credentials: 'include',
     });
 

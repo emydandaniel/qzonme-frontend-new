@@ -55,6 +55,8 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
   
   const [selectedOption, setSelectedOption] = useState<string>("");
   const [adRefreshCounter, setAdRefreshCounter] = useState(0);
+  const [imageLoading, setImageLoading] = useState(true);
+  const [imageError, setImageError] = useState(false);
   const { toast } = useToast();
 
   const verifyAnswerMutation = useMutation({
@@ -181,27 +183,22 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
     }
   };
   
+  useEffect(() => {
+    // Reset image loading and error states when question changes
+    setImageLoading(true);
+    setImageError(false);
+  }, [currentQuestion?.imageUrl]);
+
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = e.currentTarget;
-    const parent = target.parentElement;
-    if (parent) {
-      const placeholder = parent.querySelector('.loading-placeholder');
-      if (placeholder) {
-        placeholder.classList.add('hidden');
-      }
-      target.classList.remove('opacity-0');
-    }
+    setImageLoading(false);
+    // Add opacity transition for smooth loading
+    e.currentTarget.style.opacity = '1';
   };
 
   const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    const target = e.currentTarget;
-    const parent = target.parentElement;
-    if (parent) {
-      const placeholder = parent.querySelector('.loading-placeholder');
-      if (placeholder instanceof HTMLElement) {
-        placeholder.innerHTML = 'Failed to load image';
-      }
-    }
+    setImageLoading(false);
+    setImageError(true);
+    console.error("Failed to load question image");
   };
 
   if (questions.length === 0) {
@@ -287,13 +284,23 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
               </h3>
               
               {currentQuestion.imageUrl && (
-                <div className="mt-3 mb-4 relative">
-                  <div className="loading-placeholder absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
-                      <p className="text-sm text-gray-500">Loading image...</p>
+                <div className="mt-3 mb-4 relative min-h-[200px]">
+                  {imageLoading && !imageError && (
+                    <div className="loading-placeholder absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
+                        <p className="text-sm text-gray-500">Loading image...</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
+                  
+                  {imageError && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                      <div className="text-center p-4">
+                        <p className="text-sm text-gray-500">Sorry, the image could not be loaded</p>
+                      </div>
+                    </div>
+                  )}
                   
                   <img 
                     src={currentQuestion.imageUrl} 
