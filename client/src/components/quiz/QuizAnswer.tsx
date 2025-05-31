@@ -11,7 +11,7 @@ import { verifyAnswer } from "@/lib/quizUtils";
 import AdPlaceholder from "../common/AdPlaceholder";
 
 interface QuizAnswerProps {
-  quizId: number;
+  quizId: string | number;
   quizCreator: string;
   questions: Question[];
   onComplete: (answers: QuestionAnswer[], score: number) => void;
@@ -181,6 +181,29 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
     }
   };
   
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.currentTarget;
+    const parent = target.parentElement;
+    if (parent) {
+      const placeholder = parent.querySelector('.loading-placeholder');
+      if (placeholder) {
+        placeholder.classList.add('hidden');
+      }
+      target.classList.remove('opacity-0');
+    }
+  };
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const target = e.currentTarget;
+    const parent = target.parentElement;
+    if (parent) {
+      const placeholder = parent.querySelector('.loading-placeholder');
+      if (placeholder instanceof HTMLElement) {
+        placeholder.innerHTML = 'Failed to load image';
+      }
+    }
+  };
+
   if (questions.length === 0) {
     return (
       <>
@@ -234,9 +257,7 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
         <CardContent className="pt-6">
           {/* Quiz Creator Info */}
           <div className="flex items-center mb-6">
-            <div 
-              className="w-10 h-10 rounded-full bg-primary bg-opacity-20 flex items-center justify-center text-primary font-semibold"
-            >
+            <div className="w-10 h-10 rounded-full bg-primary bg-opacity-20 flex items-center justify-center text-primary font-semibold">
               {createAvatarPlaceholder(quizCreator)}
             </div>
             <div className="ml-3">
@@ -263,37 +284,23 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
             <div className="text-center mb-6">
               <h3 className="text-xl font-poppins font-semibold mb-2">
                 {currentQuestion.question}
-              </h3>              {/* Display question image if available */}
+              </h3>
+              
               {currentQuestion.imageUrl && (
                 <div className="mt-3 mb-4 relative">
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
+                  <div className="loading-placeholder absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
                     <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2" />
                       <p className="text-sm text-gray-500">Loading image...</p>
                     </div>
                   </div>
+                  
                   <img 
                     src={currentQuestion.imageUrl} 
                     alt={`Question ${currentQuestionIndex + 1} image`}
-                    className="max-w-full h-auto max-h-64 mx-auto rounded-lg relative z-10"
-                    onLoad={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      if (target.parentElement?.firstElementChild) {
-                        target.parentElement.firstElementChild.className = "hidden";
-                      }
-                    }}
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      if (target.parentElement?.firstElementChild) {
-                        (target.parentElement.firstElementChild as HTMLElement).innerHTML = "Failed to load image";
-                      }
-                    }}
-                  />
-                      if (parent && parent.firstElementChild) {
-                        parent.firstElementChild.classList.add('hidden');
-                      }
-                    }}
-                    loading="eager" // Force eager loading
+                    className="max-w-full max-h-64 mx-auto rounded-lg opacity-0 transition-opacity duration-200"
+                    onLoad={handleImageLoad}
+                    onError={handleImageError}
                   />
                 </div>
               )}
@@ -312,7 +319,7 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
                   <div className="flex items-center">
                     <div className={`w-5 h-5 rounded-full ${
                       selectedOption === option ? 'bg-primary' : 'border-2 border-gray-300'
-                    } mr-3 flex-shrink-0`}></div>
+                    } mr-3 flex-shrink-0`} />
                     <span>{option}</span>
                   </div>
                 </label>
@@ -341,7 +348,6 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
         </CardContent>
       </Card>
       
-      {/* Ad Placeholder with refresh key to ensure ads reload when questions are answered */}
       <AdPlaceholder refreshKey={adRefreshCounter} />
     </>
   );
