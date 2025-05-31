@@ -111,3 +111,9 @@ export function getRemarkByScore(score: number, total: number): string {
     return "Perfect! You're basically my twin 🧠❤️";
   }
 }
+
+export function isQuizExpired(createdAt: string): boolean {
+  const creationDate = new Date(createdAt);
+  const expirationDate = new Date(creationDate.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days in milliseconds
+  return new Date() > expirationDate;
+}

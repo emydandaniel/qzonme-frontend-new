@@ -80,10 +80,10 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
           title={`${fallbackQuiz.creatorName}'s Quiz Just for You 💬`}
           description={`How well do you know ${fallbackQuiz.creatorName}? Try this private QzonMe quiz they made just for close friends.`}
         />
-        
-        <ShareQuiz
+          <ShareQuiz
           quizId={quizId}
           urlSlug={fallbackQuiz.urlSlug}
+          creatorName={fallbackQuiz.creatorName}
         />
       </>
     );

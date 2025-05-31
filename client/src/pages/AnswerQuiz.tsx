@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Layout from "@/components/common/Layout";
 import MetaTags from "@/components/common/MetaTags";
+import { isQuizExpired } from "@/lib/utils";
 
 interface AnswerQuizProps {
   params: {

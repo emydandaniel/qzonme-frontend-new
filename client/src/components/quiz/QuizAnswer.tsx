@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { Question, QuestionAnswer } from "@/lib/schema";
 import { createAvatarPlaceholder, showAdInterstitial } from "@/lib/utils";
 import { verifyAnswer } from "@/lib/quizUtils";
+import { apiRequest } from "@/lib/api";
 
 import AdPlaceholder from "../common/AdPlaceholder";
 
@@ -59,8 +60,7 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
   const verifyAnswerMutation = useMutation({
     mutationFn: async (answer: string) => {
       try {
-        const response = await apiRequest("POST", `/api/answers/verify`, {
-          questionId: questions[currentQuestionIndex].id,
+        const response = await apiRequest("POST", `/api/questions/${questions[currentQuestionIndex].id}/verify`, {
           answer
         });
         if (!response.ok) {

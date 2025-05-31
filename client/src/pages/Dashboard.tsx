@@ -193,9 +193,8 @@ const Dashboard: React.FC<DashboardProps> = ({ params }) => {
         </Card>
       </div>
     );
-  }
-  if (showShareView) {
-    return <ShareQuiz quizId={quiz.id.toString()} urlSlug={quiz.urlSlug} />;
+  }  if (showShareView) {
+    return <ShareQuiz quizId={quiz.id.toString()} urlSlug={quiz.urlSlug} creatorName={quiz.creatorName} />;
   }
 
   console.log("Dashboard rendering with attempts:", attempts);
