@@ -21,15 +21,15 @@ interface Quiz {
 interface ShareQuizProps {
   quizId: string;
   urlSlug: string;
-  creatorName?: string;
+  creatorName: string;
 }
 
-const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
+const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug, creatorName: propCreatorName }) => {
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
   const [copiedDashboard, setCopiedDashboard] = useState(false);
-
+  
   // Get quiz data with proper typing and error handling
   const { data: quiz, isLoading, error } = useQuery<Quiz>({
     queryKey: ['quiz', quizId],
@@ -54,7 +54,9 @@ const ShareQuiz: React.FC<ShareQuizProps> = ({ quizId, urlSlug }) => {
   // Get dashboard token and other data from multiple sources
   const dashboardToken = quiz?.dashboardToken || sessionStorage.getItem("currentQuizDashboardToken");
   const accessCode = quiz?.accessCode || sessionStorage.getItem("currentQuizAccessCode");
-  const creatorName = quiz?.creatorName || sessionStorage.getItem("currentCreatorName");
+  
+  // Use creator name from multiple fallback sources
+  const creatorName = quiz?.creatorName || propCreatorName || sessionStorage.getItem("currentCreatorName") || "";
 
   // Use a custom domain for sharing
   const customDomain = window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://qzonme.com';

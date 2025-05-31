@@ -25,51 +25,46 @@ const AnswerQuiz: React.FC<AnswerQuizProps> = ({ params }) => {
   // Try both possible keys to maintain compatibility
   const userName = sessionStorage.getItem("userName") || sessionStorage.getItem("username") || "";
   const userId = parseInt(sessionStorage.getItem("userId") || "0");
-
-  // Check if user is logged in, if not, save the quiz info and redirect to home
+  
+  // Verify user session exists
   React.useEffect(() => {
     if (!userName || !userId) {
-      // Save the quiz params to session storage
+      // Save the quiz params to session storage and redirect to home
       if (accessCode) {
         sessionStorage.setItem("pendingQuizCode", accessCode);
       } else if (creatorSlug) {
         sessionStorage.setItem("pendingQuizSlug", creatorSlug);
       }
-      
-      // Redirect to home page to enter name
       navigate("/");
       return;
     }
-  }, [accessCode, creatorSlug, navigate, userName, userId]);
+  }, [accessCode, creatorSlug, userName, userId, navigate]);
 
-  // Determine if we're using access code or creator slug
+  // Determine API endpoint
   const isUsingAccessCode = !!accessCode && !creatorSlug;
   const identifier = isUsingAccessCode ? accessCode : creatorSlug;
   const endpoint = isUsingAccessCode ? `/api/quizzes/code/${identifier}` : `/api/quizzes/slug/${identifier}`;
 
-  // Helper function to check if a quiz has expired
-  const isQuizExpired = (createdAtString: string | Date) => {
-    const createdAt = new Date(createdAtString);
-    const expirationDate = new Date(createdAt);
-    expirationDate.setDate(expirationDate.getDate() + 30);
-    
-    return new Date() > expirationDate;
-  };
-
-  // Generate unique cache key for this particular quiz attempt
+  // Generate unique cache key per attempt
   const cacheKey = React.useMemo(() => `quiz-${identifier}-${Date.now()}`, [identifier]);
 
-  // Fetch quiz by access code or URL slug with aggressive cache invalidation
+  // Fetch quiz with better error handling
   const { data: quiz, isLoading: isLoadingQuiz, error: quizError } = useQuery<Quiz>({
     queryKey: [endpoint, cacheKey],
     enabled: !!identifier && !!userName && !!userId,
-    retry: 3, // Retry failed requests up to 3 times
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000), // Exponential backoff
-    staleTime: 0, // Don't use stale data
-    gcTime: 0, // Don't cache at all
-    refetchOnMount: "always", // Always refetch on mount
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true
+    retry: 3,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+    staleTime: 0,
+    gcTime: 0,
+    queryFn: async () => {
+      const response = await apiRequest("GET", endpoint);
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("Quiz loading error:", error);
+        throw new Error(error);
+      }
+      return response.json();
+    }
   });
   
   console.log("AnswerQuiz - quiz data:", { 
@@ -90,19 +85,28 @@ const AnswerQuiz: React.FC<AnswerQuizProps> = ({ params }) => {
   });
 
   // Submit quiz attempt
-  const submitAttemptMutation = useMutation({
-    mutationFn: async (data: {
+  const submitAttemptMutation = useMutation({    mutationFn: async (data: {
       answers: QuestionAnswer[];
       score: number;
     }) => {
       const response = await apiRequest("POST", "/api/quiz-attempts", {
         quizId: quiz?.id,
-        userAnswerId: userId,
-        userName,
-        score: data.score,
+        userAnswerId: userId.toString(),
+        userName: userName,
+        score: Math.min(data.score, questions.length),
         totalQuestions: questions.length,
-        answers: data.answers
+        answers: data.answers.map(answer => ({
+          ...answer,
+          questionId: answer.questionId.toString()
+        }))
       });
+      
+      if (!response.ok) {
+        const error = await response.text();
+        console.error("Quiz submission error:", error);
+        throw new Error("Failed to submit quiz");
+      }
+      
       return response.json();
     },
     onSuccess: (data) => {

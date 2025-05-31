@@ -27,7 +27,7 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
   const storageKeyPrefix = `qzonme_quiz_${quizId}_`;
   
   // Load from localStorage if available, otherwise start fresh
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(() => {
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState<number>(() => {
     try {
       const saved = localStorage.getItem(`${storageKeyPrefix}currentIndex`);
       return saved ? parseInt(saved, 10) : 0;
@@ -55,6 +55,24 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
   const [selectedOption, setSelectedOption] = useState<string>("");
   const [adRefreshCounter, setAdRefreshCounter] = useState(0);
   const { toast } = useToast();
+
+  const verifyAnswerMutation = useMutation({
+    mutationFn: async (answer: string) => {
+      try {
+        const response = await apiRequest("POST", `/api/answers/verify`, {
+          questionId: questions[currentQuestionIndex].id,
+          answer
+        });
+        if (!response.ok) {
+          throw new Error("Failed to verify answer");
+        }
+        return response.json();
+      } catch (error) {
+        console.error("Error verifying answer:", error);
+        throw error;
+      }
+    }
+  });
   
   // Save to localStorage whenever answers or current index changes
   useEffect(() => {
@@ -81,13 +99,6 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
   const handleOptionSelect = (option: string) => {
     setSelectedOption(option);
   };
-  
-  const verifyAnswerMutation = useMutation({
-    mutationFn: async (answer: string | string[]) => {
-      const result = await verifyAnswer(Number(currentQuestion.id), answer);
-      return result;
-    }
-  });
   
   const handleNext = async () => {
     // Check if an answer is selected
@@ -253,27 +264,45 @@ const QuizAnswer: React.FC<QuizAnswerProps> = ({
               <h3 className="text-xl font-poppins font-semibold mb-2">
                 {currentQuestion.question}
               </h3>
-              
-              {/* Display question image if available with loading indicator */}
+                {/* Display question image if available with loading indicator */}
               {currentQuestion.imageUrl && (
                 <div className="mt-3 mb-4 relative">
-                  {/* Loading placeholder */}
-                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg">
-                    <div className="animate-pulse text-center">
+                  {/* Loading placeholder - initially visible */}
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
+                    <div className="text-center">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
                       <p className="text-sm text-gray-500">Loading image...</p>
                     </div>
                   </div>
                   
-                  {/* Actual image with preload */}
+                  {/* Actual image preload in background */}
                   <img 
                     src={currentQuestion.imageUrl} 
-                    alt="Question image" 
-                    className="max-w-full max-h-64 mx-auto rounded-lg relative z-10"
+                    alt={`Question ${currentQuestionIndex + 1} image`}
+                    className="max-w-full max-h-64 mx-auto rounded-lg opacity-0 transition-opacity duration-200"
                     onLoad={(e) => {
-                      // Hide placeholder once image is loaded
+                      // Once loaded, hide placeholder and show image
                       const target = e.target as HTMLImageElement;
                       const parent = target.parentElement;
+                      if (parent) {
+                        const placeholder = parent.firstElementChild;
+                        if (placeholder) {
+                          placeholder.classList.add('hidden');
+                        }
+                        target.classList.remove('opacity-0');
+                      }
+                    }}
+                    onError={(e) => {
+                      // Handle image load failure
+                      const target = e.target as HTMLImageElement;
+                      const parent = target.parentElement;
+                      if (parent) {
+                        const placeholder = parent.firstElementChild as HTMLElement;
+                        if (placeholder) {
+                          placeholder.innerHTML = 'Failed to load image';
+                        }
+                      }
+                    }}
                       if (parent && parent.firstElementChild) {
                         parent.firstElementChild.classList.add('hidden');
                       }

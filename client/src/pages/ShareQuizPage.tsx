@@ -119,11 +119,10 @@ const ShareQuizPage: React.FC<ShareQuizPageProps> = ({ params }) => {
         imageUrl="/favicon.png"
         title={`${quiz.creatorName}'s Quiz Just for You 💬`}
         description={`How well do you know ${quiz.creatorName}? Try this private QzonMe quiz they made just for close friends.`}
-      />
-        <ShareQuiz
+      />      <ShareQuiz
         quizId={quizId}
         urlSlug={quiz.urlSlug}
-        creatorName={quiz.creatorName}
+        creatorName={quiz.creatorName || sessionStorage.getItem("currentCreatorName") || ""}
       />
     </>
   );
