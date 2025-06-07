@@ -10,30 +10,38 @@ import {
   questionAnswerSchema,
   quizzes,
   quizAttempts,
-  questions
+  questions,
+  users // Added users table import
 } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { fileURLToPath } from 'url';
+import { fileURLToPath } from "url";
 import { registerContactRoutes } from "./routes/contact";
+import { eq } from "drizzle-orm"; // Import eq for queries
+import { log } from "./vite"; // Assuming log function is available
 
 // Setup dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Setup temporary upload directory for processing before sending to Cloudinary
-const projectRoot = path.resolve(__dirname, '..');
-const tempUploadDir = path.join(projectRoot, 'temp_uploads');
+const projectRoot = path.resolve(__dirname, "..");
+const tempUploadDir = path.join(projectRoot, "temp_uploads");
 
-console.log('Project root:', projectRoot);
-console.log('Temp upload directory:', tempUploadDir);
+log(`Project root: ${projectRoot}`);
+log(`Temp upload directory: ${tempUploadDir}`);
 
 // Ensure temp directory exists
 if (!fs.existsSync(tempUploadDir)) {
-  fs.mkdirSync(tempUploadDir, { recursive: true });
-  console.log(`Created temp upload directory: ${tempUploadDir}`);
+  try {
+    fs.mkdirSync(tempUploadDir, { recursive: true });
+    log(`Created temp upload directory: ${tempUploadDir}`);
+  } catch (error) {
+    log(`Error creating temp upload directory: ${error instanceof Error ? error.message : String(error)}`);
+    // Consider if this should be a fatal error depending on deployment environment needs
+  }
 }
 
 // Use multer with temporary storage
@@ -43,27 +51,26 @@ const storage_config = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     // Create a unique filename with timestamp and random string
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const filename = file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname);
-    
-    console.log(`New temp upload: ${filename}`);
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    const filename = file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname);
+    log(`New temp upload: ${filename}`);
     cb(null, filename);
-  }
+  },
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage_config,
   limits: {
-    fileSize: 10 * 1024 * 1024 // Increased to 10MB limit
+    fileSize: 10 * 1024 * 1024, // Increased to 10MB limit
   },
   fileFilter: function (req, file, cb) {
     // Accept images only
-    if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+    if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/i)) { // Added case-insensitive flag
       // @ts-ignore - Multer types aren't perfect
-      return cb(new Error('Only image files are allowed!'), false);
+      return cb(new Error("Only image files (jpg, jpeg, png, gif) are allowed!"), false);
     }
     cb(null, true);
-  }
+  },
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -71,13 +78,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/users", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
-      const user = await storage.createUser(userData);
-      res.status(201).json(user);
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid user data", error: (error as z.ZodError).message });
+      // Check if user already exists
+      const existingUser = await db.select().from(users).where(eq(users.username, userData.username)).limit(1);
+      if (existingUser.length > 0) {
+        // User exists, return existing user data
+        log(`User "${userData.username}" already exists. Returning existing user.`);
+        res.status(200).json(existingUser[0]);
       } else {
-        res.status(500).json({ message: "Failed to create user" });
+        // User does not exist, create new user
+        log(`Creating new user: "${userData.username}"`);
+        const user = await storage.createUser(userData);
+        res.status(201).json(user);
+      }
+    } catch (error) {
+      log(`Error in POST /api/users: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof z.ZodError) {
+        res.status(400).json({ message: "Invalid user data", error: error.flatten() });
+      } else {
+        res.status(500).json({ message: "Failed to process user request" });
       }
     }
   });
@@ -86,178 +104,187 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quizzes", async (req, res) => {
     try {
       const quizData = insertQuizSchema.parse(req.body);
-      
-      // Additional server-side validation for creator name to prevent the bug
-      if (!quizData.creatorName || quizData.creatorName.trim() === '') {
-        return res.status(400).json({ 
+
+      // Additional server-side validation for creator name
+      if (!quizData.creatorName || quizData.creatorName.trim() === "") {
+        log("Validation Error: Creator name cannot be empty");
+        return res.status(400).json({
           message: "Creator name cannot be empty",
-          error: "EMPTY_CREATOR_NAME" 
+          error: "EMPTY_CREATOR_NAME",
         });
       }
-      
+
       // Extra validation to catch any instance of the known default value
-      if (quizData.creatorName.toLowerCase() === 'emydan') {
-        console.error("CRITICAL BUG DETECTED: Default name 'emydan' was submitted");
-        return res.status(400).json({ 
+      if (quizData.creatorName.toLowerCase() === "emydan") {
+        log("CRITICAL BUG DETECTED: Default name 'emydan' was submitted");
+        return res.status(400).json({
           message: "Cannot use default creator name. Please enter your own name.",
-          error: "DEFAULT_CREATOR_NAME_USED"
+          error: "DEFAULT_CREATOR_NAME_USED",
         });
       }
-      
-      console.log(`Creating quiz with creator name: "${quizData.creatorName}"`);
-      
+
+      log(`Creating quiz with creator name: "${quizData.creatorName}"`);
+
       const quiz = await storage.createQuiz(quizData);
       res.status(201).json(quiz);
     } catch (error) {
+      log(`Error in POST /api/quizzes: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid quiz data", error: (error as z.ZodError).message });
+        res.status(400).json({ message: "Invalid quiz data", error: error.flatten() });
       } else {
         res.status(500).json({ message: "Failed to create quiz" });
       }
     }
   });
-  
-  // Get all quizzes (for testing)
+
+  // Get all quizzes (for testing/admin)
   app.get("/api/quizzes", async (req, res) => {
     try {
-      // Get all quizzes from the database
+      log("Fetching all quizzes...");
       const allQuizzes = await db.select().from(quizzes);
       res.json(allQuizzes);
     } catch (error) {
-      console.error("Error fetching all quizzes:", error);
+      log(`Error fetching all quizzes: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quizzes" });
     }
   });
 
+  // Get quiz by access code
   app.get("/api/quizzes/code/:accessCode", async (req, res) => {
     try {
       const accessCode = req.params.accessCode;
+      log(`Fetching quiz by access code: ${accessCode}`);
       const quiz = await storage.getQuizByAccessCode(accessCode);
-      
+
       if (!quiz) {
+        log(`Quiz not found for access code: ${accessCode}`);
         return res.status(404).json({ message: "Quiz not found" });
       }
-      
-      // Check if the quiz is expired (older than 7 days)
+
+      // Check if the quiz is expired
       const isExpired = storage.isQuizExpired(quiz);
       if (isExpired) {
-        return res.status(410).json({ 
-          message: "Quiz expired", 
+        log(`Quiz ${quiz.id} (code: ${accessCode}) is expired.`);
+        return res.status(410).json({
+          message: "Quiz expired",
           expired: true,
-          detail: "This quiz has expired. Quizzes are available for 7 days after creation."
+          detail: "This quiz has expired. Quizzes are available for 7 days after creation.",
         });
       }
-      
+
       res.json(quiz);
     } catch (error) {
+      log(`Error fetching quiz by access code ${req.params.accessCode}: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quiz" });
     }
   });
-  
+
+  // Get quiz by URL slug
   app.get("/api/quizzes/slug/:urlSlug", async (req, res) => {
     try {
       const urlSlug = req.params.urlSlug;
-      console.log(`Looking up quiz with URL slug: "${urlSlug}"`);
-      
-      // First, try exact match
+      log(`Fetching quiz by URL slug: "${urlSlug}"`);
+
       let quiz = await storage.getQuizByUrlSlug(urlSlug);
-      
-      // If no exact match, try checking if the slug uses a different casing
+
+      // Case-insensitive fallback (consider performance implications on large datasets)
       if (!quiz) {
-        // Get all quizzes from the database
+        log(`Exact slug match failed for "${urlSlug}". Trying case-insensitive search...`);
         const allQuizzesList = await db.select().from(quizzes);
-        
-        // Find a case-insensitive match
-        const slugMatch = allQuizzesList.find(q => 
-          q.urlSlug.toLowerCase() === urlSlug.toLowerCase()
+        const slugMatch = allQuizzesList.find(
+          (q) => q.urlSlug.toLowerCase() === urlSlug.toLowerCase(),
         );
-        
         if (slugMatch) {
           quiz = slugMatch;
-          console.log(`Found quiz with case-insensitive match: ${slugMatch.urlSlug}`);
+          log(`Found quiz with case-insensitive match: ${slugMatch.urlSlug}`);
         } else {
-          console.log(`No quiz found with URL slug: "${urlSlug}"`);
+          log(`No quiz found with URL slug: "${urlSlug}" (case-insensitive)`);
           return res.status(404).json({ message: "Quiz not found" });
         }
       }
-      
-      // Check if the quiz is expired (older than 7 days)
+
+      // Check if the quiz is expired
       const isExpired = storage.isQuizExpired(quiz);
       if (isExpired) {
-        return res.status(410).json({ 
-          message: "Quiz expired", 
+        log(`Quiz ${quiz.id} (slug: ${urlSlug}) is expired.`);
+        return res.status(410).json({
+          message: "Quiz expired",
           expired: true,
-          detail: "This quiz has expired. Quizzes are available for 7 days after creation."
+          detail: "This quiz has expired. Quizzes are available for 7 days after creation.",
         });
       }
-      
+
       res.json(quiz);
     } catch (error) {
-      console.error(`Error fetching quiz by slug "${req.params.urlSlug}":`, error);
+      log(`Error fetching quiz by slug "${req.params.urlSlug}": ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quiz" });
     }
   });
-  
+
   // Get quiz by dashboard token
   app.get("/api/quizzes/dashboard/:token", async (req, res) => {
     try {
       const dashboardToken = req.params.token;
-      console.log(`Looking up quiz with dashboard token: "${dashboardToken}"`);
-      
-      // Use the storage function to get the quiz by dashboard token
+      log(`Fetching quiz by dashboard token: "${dashboardToken}"`);
+
       const quiz = await storage.getQuizByDashboardToken(dashboardToken);
-      
+
       if (!quiz) {
-        console.log(`No quiz found with dashboard token: "${dashboardToken}"`);
+        log(`No quiz found with dashboard token: "${dashboardToken}"`);
         return res.status(404).json({ message: "Quiz not found" });
       }
-      
-      // Check if the quiz is expired (older than 7 days)
+
+      // Check if the quiz is expired
       const isExpired = storage.isQuizExpired(quiz);
       if (isExpired) {
-        return res.status(410).json({ 
-          message: "Quiz expired", 
+        log(`Quiz ${quiz.id} (dashboard token: ${dashboardToken}) is expired.`);
+        return res.status(410).json({
+          message: "Quiz expired",
           expired: true,
-          detail: "This quiz has expired. Quizzes are available for 7 days after creation."
+          detail: "This quiz has expired. Quizzes are available for 7 days after creation.",
         });
       }
-      
+
       res.json(quiz);
     } catch (error) {
-      console.error(`Error fetching quiz by dashboard token "${req.params.token}":`, error);
+      log(`Error fetching quiz by dashboard token "${req.params.token}": ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quiz" });
     }
   });
-  
+
   // Get quiz by ID
   app.get("/api/quizzes/:quizId", async (req, res) => {
     try {
       const quizId = parseInt(req.params.quizId);
-      
+      log(`Fetching quiz by ID: ${quizId}`);
+
       if (isNaN(quizId)) {
+        log(`Invalid quiz ID received: ${req.params.quizId}`);
         return res.status(400).json({ message: "Invalid quiz ID" });
       }
-      
+
       const quiz = await storage.getQuiz(quizId);
-      
+
       if (!quiz) {
+        log(`Quiz not found for ID: ${quizId}`);
         return res.status(404).json({ message: "Quiz not found" });
       }
-      
-      // Check if the quiz is expired (older than 7 days)
+
+      // Check if the quiz is expired
       const isExpired = storage.isQuizExpired(quiz);
       if (isExpired) {
-        return res.status(410).json({ 
-          message: "Quiz expired", 
+        log(`Quiz ${quizId} is expired.`);
+        return res.status(410).json({
+          message: "Quiz expired",
           expired: true,
-          detail: "This quiz has expired. Quizzes are available for 7 days after creation."
+          detail: "This quiz has expired. Quizzes are available for 7 days after creation.",
         });
       }
-      
-      console.log(`GET /api/quizzes/${quizId} response:`, quiz);
+
+      log(`GET /api/quizzes/${quizId} response:`, quiz);
       res.json(quiz);
     } catch (error) {
-      console.error(`Error fetching quiz ${req.params.quizId}:`, error);
+      log(`Error fetching quiz ${req.params.quizId}: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quiz" });
     }
   });
@@ -266,28 +293,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/questions", async (req, res) => {
     try {
       const questionData = insertQuestionSchema.parse(req.body);
+      log(`Creating new question for quiz ID: ${questionData.quizId}`);
       const question = await storage.createQuestion(questionData);
       res.status(201).json(question);
     } catch (error) {
+      log(`Error in POST /api/questions: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid question data", error: (error as z.ZodError).message });
+        res.status(400).json({ message: "Invalid question data", error: error.flatten() });
       } else {
         res.status(500).json({ message: "Failed to create question" });
       }
     }
   });
 
+  // Get questions for a specific quiz
   app.get("/api/quizzes/:quizId/questions", async (req, res) => {
     try {
       const quizId = parseInt(req.params.quizId);
-      
+      log(`Fetching questions for quiz ID: ${quizId}`);
+
       if (isNaN(quizId)) {
+        log(`Invalid quiz ID received: ${req.params.quizId}`);
         return res.status(400).json({ message: "Invalid quiz ID" });
       }
-      
-      const questions = await storage.getQuestionsByQuizId(quizId);
-      res.json(questions);
+
+      const questionsResult = await storage.getQuestionsByQuizId(quizId);
+      res.json(questionsResult);
     } catch (error) {
+      log(`Error fetching questions for quiz ${req.params.quizId}: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch questions" });
     }
   });
@@ -296,102 +329,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quiz-attempts", async (req, res) => {
     try {
       const attemptData = insertQuizAttemptSchema.parse(req.body);
+      log(`Creating quiz attempt for quiz ID: ${attemptData.quizId} by ${attemptData.takerName}`);
       const attempt = await storage.createQuizAttempt(attemptData);
       res.status(201).json(attempt);
     } catch (error) {
+      log(`Error in POST /api/quiz-attempts: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid attempt data", error: (error as z.ZodError).message });
+        res.status(400).json({ message: "Invalid attempt data", error: error.flatten() });
       } else {
         res.status(500).json({ message: "Failed to create quiz attempt" });
       }
     }
   });
 
+  // Get attempts for a specific quiz
   app.get("/api/quizzes/:quizId/attempts", async (req, res) => {
     try {
       // Add aggressive anti-caching headers
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
       const quizId = parseInt(req.params.quizId);
       const timestamp = Date.now(); // For debugging
-      
-      console.log(`[${timestamp}] Fetching attempts for quiz ${quizId}`);
-      
+      log(`[${timestamp}] Fetching attempts for quiz ${quizId}`);
+
       if (isNaN(quizId)) {
+        log(`Invalid quiz ID received: ${req.params.quizId}`);
         return res.status(400).json({ message: "Invalid quiz ID" });
       }
-      
-      // Add a small delay to ensure previous writes have been committed
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
+
+      // Add a small delay? Consider if necessary or if DB transaction isolation handles this.
+      // await new Promise(resolve => setTimeout(resolve, 100));
+
       const attempts = await storage.getQuizAttempts(quizId);
-      
-      console.log(`[${timestamp}] Returning ${attempts.length} attempts for quiz ${quizId}`);
-      
-      // Add a server timestamp in the response to help client detect freshness
-      // Sort attempts by completion date (newest first) for immediate display
+      log(`[${timestamp}] Found ${attempts.length} attempts for quiz ${quizId}`);
+
+      // Sort attempts by completion date (newest first)
       attempts.sort((a, b) => new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime());
-      
-      console.log(`[${timestamp}] Sending sorted attempts: ${attempts.map(a => a.id).join(', ')}`);
-      
+      log(`[${timestamp}] Sending sorted attempts: ${attempts.map((a) => a.id).join(", ")}`);
+
       res.json({
         data: attempts,
         serverTime: timestamp,
-        count: attempts.length
+        count: attempts.length,
       });
     } catch (error) {
-      console.error("Error fetching quiz attempts:", error);
+      log(`Error fetching quiz attempts for quiz ${req.params.quizId}: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quiz attempts" });
     }
   });
-  
+
   // Get specific quiz attempt by ID
   app.get("/api/quiz-attempts/:attemptId", async (req, res) => {
     try {
       // Add anti-caching headers
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+
       const attemptId = parseInt(req.params.attemptId);
       const timestamp = Date.now(); // For tracing and debugging
-      
+      log(`[${timestamp}] Fetching attempt with ID ${attemptId}`);
+
       if (isNaN(attemptId)) {
+        log(`Invalid attempt ID received: ${req.params.attemptId}`);
         return res.status(400).json({ message: "Invalid attempt ID" });
       }
-      
-      console.log(`[${timestamp}] Fetching attempt with ID ${attemptId}`);
-      
-      // Get all attempt IDs from all quizzes
-      // This is a temporary workaround since we don't have a direct getAttemptById method
-      const allQuizzesList = await db.select().from(quizzes);
-      const allAttempts = [];
-      
-      // Gather all attempts for all quizzes
-      for (const quiz of allQuizzesList) {
-        const quizAttempts = await storage.getQuizAttempts(quiz.id);
-        allAttempts.push(...quizAttempts);
-      }
-      
-      // Find the specific attempt
-      const attempt = allAttempts.find(a => a.id === attemptId);
-      
+
+      // Fetch attempt directly by ID
+      const attemptResult = await db.select().from(quizAttempts).where(eq(quizAttempts.id, attemptId)).limit(1);
+      const attempt = attemptResult[0];
+
       if (!attempt) {
-        console.log(`[${timestamp}] Attempt ID ${attemptId} not found`);
+        log(`[${timestamp}] Attempt ID ${attemptId} not found`);
         return res.status(404).json({ message: "Quiz attempt not found" });
       }
-      
-      console.log(`[${timestamp}] Found attempt ${attemptId} (quiz ${attempt.quizId})`);
-      
+
+      log(`[${timestamp}] Found attempt ${attemptId} (quiz ${attempt.quizId})`);
+
       // Send with timestamp for caching verification
       res.json({
         data: attempt,
-        serverTime: timestamp
+        serverTime: timestamp,
       });
     } catch (error) {
-      console.error(`Error fetching quiz attempt ${req.params.attemptId}:`, error);
+      log(`Error fetching quiz attempt ${req.params.attemptId}: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ message: "Failed to fetch quiz attempt" });
     }
   });
@@ -400,138 +423,117 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/questions/:questionId/verify", async (req, res) => {
     try {
       const questionId = parseInt(req.params.questionId);
-      
+      log(`Verifying answer for question ID: ${questionId}`);
+
       if (isNaN(questionId)) {
+        log(`Invalid question ID received: ${req.params.questionId}`);
         return res.status(400).json({ message: "Invalid question ID" });
       }
-      
-      const answerData = z.object({
-        answer: z.union([z.string(), z.array(z.string())])
-      }).parse(req.body);
-      
-      // Get all questions from the database
-      const allQuestions = await db.select().from(questions);
-      
-      // Find the specific question
-      const question = allQuestions.find(q => q.id === questionId);
-      
+
+      const answerData = z
+        .object({
+          answer: z.union([z.string(), z.array(z.string())]),
+        })
+        .parse(req.body);
+
+      // Fetch the specific question by ID
+      const questionResult = await db.select().from(questions).where(eq(questions.id, questionId)).limit(1);
+      const question = questionResult[0];
+
       if (!question) {
-        console.error(`[SERVER ERROR] Question not found: ${questionId}`);
+        log(`[SERVER ERROR] Question not found: ${questionId}`);
         return res.status(404).json({ message: "Question not found" });
       }
-      
+
       let isCorrect = false;
-      const correctAnswers = question.correctAnswers as string[];
+      // Ensure correctAnswers is treated as an array
+      const correctAnswers = Array.isArray(question.correctAnswers) 
+                             ? question.correctAnswers 
+                             : JSON.parse(question.correctAnswers as string);
+                             
       const userAnswer = answerData.answer;
-      
-      // Debug logs to trace the issue
-      console.log(`Verifying answer for question ${questionId}:`);
-      console.log(`- Correct answers:`, correctAnswers);
-      console.log(`- User answer:`, userAnswer);
-      
+
+      log(`- Correct answers:`, correctAnswers);
+      log(`- User answer:`, userAnswer);
+
       if (Array.isArray(userAnswer)) {
-        // For multiple answers, check if all are correct
-        isCorrect = userAnswer.every(ans => 
-          correctAnswers.some(correct => 
-            correct.toLowerCase().trim() === ans.toLowerCase().trim()
-          )
-        );
+        // For multiple answers (select_all), check if sets match exactly
+        const userAnswersSet = new Set(userAnswer.map(ans => ans.toLowerCase().trim()));
+        const correctAnswersSet = new Set(correctAnswers.map(correct => correct.toLowerCase().trim()));
+        isCorrect = userAnswersSet.size === correctAnswersSet.size && 
+                    [...userAnswersSet].every(ans => correctAnswersSet.has(ans));
       } else {
-        // For single answer, check if it matches any correct answer
-        // Use trim() to fix whitespace issues and ensure exact matching
+        // For single answer (multiple_choice), check if it matches any correct answer
         const normalizedUserAnswer = userAnswer.toString().toLowerCase().trim();
-        isCorrect = correctAnswers.some(correct => 
-          correct.toLowerCase().trim() === normalizedUserAnswer
+        isCorrect = correctAnswers.some(
+          (correct) => correct.toLowerCase().trim() === normalizedUserAnswer,
         );
       }
-      
-      console.log(`Answer is ${isCorrect ? 'CORRECT' : 'INCORRECT'}`);
-      
-      // Return both the correctness and the expected answers for debugging
-      res.json({ 
+
+      log(`Answer is ${isCorrect ? "CORRECT" : "INCORRECT"}`);
+
+      res.json({
         isCorrect,
-        debug: {
-          questionText: question.text,
-          correctAnswers: correctAnswers,
-          userAnswer: userAnswer
-        }
+        // Optionally remove debug info in production
+        // debug: {
+        //   questionText: question.text,
+        //   correctAnswers: correctAnswers,
+        //   userAnswer: userAnswer
+        // }
       });
     } catch (error) {
-      console.error("Error verifying answer:", error);
+      log(`Error verifying answer for question ${req.params.questionId}: ${error instanceof Error ? error.message : String(error)}`);
       if (error instanceof z.ZodError) {
-        res.status(400).json({ message: "Invalid answer data", error: (error as z.ZodError).message });
+        res.status(400).json({ message: "Invalid answer data", error: error.flatten() });
       } else {
         res.status(500).json({ message: "Failed to verify answer" });
       }
     }
   });
-  
-  // Image upload endpoint using Cloudinary
-  app.post("/api/upload-image", upload.single('image'), async (req, res) => {
+
+  // Image upload route
+  app.post("/api/upload", upload.single("image"), async (req, res) => {
     try {
-      // Import here to avoid circular dependencies
-      const { uploadToCloudinary } = await import('./cloudinary');
-      
       if (!req.file) {
+        log("Upload Error: No file uploaded.");
         return res.status(400).json({ message: "No file uploaded" });
       }
+
+      log(`Processing uploaded file: ${req.file.filename} (path: ${req.file.path})`);
       
-      const filePath = req.file.path;
-      const originalFilename = req.file.filename;
-      
-      console.log(`Processing image upload: ${originalFilename}`);
-      
-      // Get the quiz ID from the request body or query params
-      // Default to 0 for new quizzes that don't have an ID yet
-      const quizId = parseInt(req.body.quizId || req.query.quizId || '0');
-      
-      // Upload to Cloudinary with optimization
-      const cloudinaryResult = await uploadToCloudinary(filePath, quizId);
-      
-      // Delete the temporary file after upload
+      // Upload the file from the temporary path to Cloudinary
+      const result = await storage.uploadImage(req.file.path);
+      log(`Cloudinary upload successful: ${result.secure_url}`);
+
+      // Clean up the temporary file after successful upload
       try {
-        fs.unlinkSync(filePath);
-        console.log(`Deleted temporary file: ${filePath}`);
-      } catch (deleteErr) {
-        console.error(`Warning: Could not delete temporary file:`, deleteErr);
-        // Continue anyway as the upload is already complete
+        fs.unlinkSync(req.file.path);
+        log(`Deleted temp file: ${req.file.path}`);
+      } catch (cleanupError) {
+        log(`Error deleting temp file ${req.file.path}: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+        // Non-fatal error, proceed with response
       }
-      
-      // Return the Cloudinary image URL
-      res.status(201).json({ 
-        imageUrl: cloudinaryResult.secure_url,
-        // Include cache-busted URL for immediate use
-        cacheBustedUrl: `${cloudinaryResult.secure_url}?t=${Date.now()}`,
-        publicId: cloudinaryResult.public_id,
-        message: "Image uploaded successfully to Cloudinary",
-        format: cloudinaryResult.format,
-        width: cloudinaryResult.width,
-        height: cloudinaryResult.height,
-        bytes: cloudinaryResult.bytes
-      });
+
+      res.json({ imageUrl: result.secure_url });
     } catch (error) {
-      console.error("Error uploading image to Cloudinary:", error);
-      res.status(500).json({ 
-        message: "Failed to upload image", 
-        error: error instanceof Error ? error.message : String(error)
-      });
+      log(`Error during image upload: ${error instanceof Error ? error.message : String(error)}`);
+      // Clean up temp file even if Cloudinary upload failed
+      if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+        try {
+          fs.unlinkSync(req.file.path);
+          log(`Deleted temp file after error: ${req.file.path}`);
+        } catch (cleanupError) {
+          log(`Error deleting temp file ${req.file.path} after error: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+        }
+      }
+      res.status(500).json({ message: "Failed to upload image" });
     }
   });
-  
-  // Add a backward compatibility route for any old image URLs
-  // This will redirect to a "no image" placeholder to avoid breaking existing content
-  app.use('/uploads', (req, res) => {
-    console.log(`Legacy image request received for: ${req.path}`);
-    // Return 404 with a JSON message explaining the change
-    res.status(404).json({
-      error: 'Legacy image path',
-      message: 'Images are now served from Cloudinary for better performance and reliability'
-    });
-  });
-  
+
   // Register contact form routes
   registerContactRoutes(app);
 
-  const httpServer = createServer(app);
-  return httpServer;
+  const server = createServer(app);
+  return server;
 }
+

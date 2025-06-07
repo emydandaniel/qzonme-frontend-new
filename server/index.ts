@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import cors from "cors"; // Import cors
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import * as pathModule from "path";
@@ -7,6 +8,16 @@ import { scheduleCleanupTask } from './cleanup';
 import { testCloudinaryConnection } from './cloudinary';
 
 const app = express();
+
+// Enable CORS for all origins in development, restrict in production
+const corsOptions = {
+  origin: process.env.NODE_ENV === "development" 
+    ? "*" 
+    : ["https://your-vercel-frontend-url.vercel.app", "http://localhost:5000"], // Replace with actual Vercel URL
+  credentials: true,
+};
+app.use(cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -61,7 +72,8 @@ app.use((req, res, next) => {
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    // Removed throw err; to prevent server crash on error
+    console.error("Error handled:", err); // Log the error instead
   });
 
   // importantly only setup vite in development and after
@@ -74,14 +86,14 @@ app.use((req, res, next) => {
     
     // History API fallback - serve index.html for any route that doesn't match an API or static resource
     // This is necessary for client-side routing to work with direct URL access
-    app.get('*', (req, res) => {
-      // Skip API routes
-      if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/assets')) {
-        return;
+    app.get('*', (req, res, next) => {
+      // Skip API routes and specific file types
+      if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.includes('.')) {
+        return next(); // Pass to next middleware if it's an API call, upload, or has an extension
       }
       
       // For all other routes, serve the index.html file
-      const distPath = pathModule.resolve(import.meta.dirname, "public");
+      const distPath = pathModule.resolve(process.cwd(), "dist", "public"); // Adjusted path for production build
       res.sendFile(pathModule.resolve(distPath, "index.html"));
     });
   }
@@ -114,3 +126,4 @@ app.use((req, res, next) => {
     log('Scheduled daily cleanup task for expired quizzes (7-day retention period)');
   });
 })();
+

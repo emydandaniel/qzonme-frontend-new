@@ -45,15 +45,16 @@ export async function setupVite(app: Express, server: Server) {
     const url = req.originalUrl;
 
     try {
+      // Correct path to client index.html relative to project root
       const clientTemplate = path.resolve(
-        import.meta.dirname,
-        "..",
+        process.cwd(), // Use process.cwd() for consistency
         "client",
         "index.html",
       );
 
       // always reload the index.html file from disk incase it changes
       let template = await fs.promises.readFile(clientTemplate, "utf-8");
+      // Add cache-busting query param to main.tsx import
       template = template.replace(
         `src="/src/main.tsx"`,
         `src="/src/main.tsx?v=${nanoid()}"`,
@@ -68,18 +69,27 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
-  const distPath = path.resolve(import.meta.dirname, "public");
+  // Correct path to the distribution directory relative to project root
+  const distPath = path.resolve(process.cwd(), "dist", "public");
+  log(`Serving static files from: ${distPath}`);
 
   if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
+    log(`Error: Build directory not found at ${distPath}. Make sure to build the client first.`);
+    // Optionally throw an error or handle differently
+    // For now, just log and continue, the fallback in index.ts might handle it
+    // throw new Error(
+    //   `Could not find the build directory: ${distPath}, make sure to build the client first`
+    // );
+    return; // Exit if dist path doesn't exist
   }
 
+  // Serve static assets from the dist/public directory
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
+  // Remove the redundant fallback route from here.
+  // The fallback route in server/index.ts handles serving index.html for client-side routing.
+  // app.use("*", (_req, res) => {
+  //   res.sendFile(path.resolve(distPath, "index.html"));
+  // });
 }
+
