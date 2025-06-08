@@ -1,5 +1,9 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+// Determine the base API URL
+// Use VITE_API_URL from environment variables if available, otherwise use relative paths
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -15,10 +19,14 @@ async function throwIfResNotOk(res: Response) {
 
 export async function apiRequest(
   method: string,
-  url: string,
+  url: string, // url should be the path, e.g., "/api/users"
   data?: unknown | undefined,
 ): Promise<Response> {
-  const res = await fetch(url, {
+  // Prepend the base URL to the path
+  const fullUrl = `${API_BASE_URL}${url}`;
+  console.log(`Making API request: ${method} ${fullUrl}`); // Log the full URL being requested
+  
+  const res = await fetch(fullUrl, {
     method,
     headers: data ? { "Content-Type": "application/json" } : {},
     body: data ? JSON.stringify(data) : undefined,
@@ -35,8 +43,13 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
+    const queryPath = queryKey[0] as string;
+    // Prepend the base URL to the query path
+    const fullQueryUrl = `${API_BASE_URL}${queryPath}`;
+    console.log(`Making query request: ${fullQueryUrl}`); // Log the full URL being queried
+    
     try {
-      const res = await fetch(queryKey[0] as string, {
+      const res = await fetch(fullQueryUrl, {
         credentials: "include",
       });
 
@@ -47,10 +60,10 @@ export const getQueryFn: <T>(options: {
       await throwIfResNotOk(res);
       
       const data = await res.json();
-      console.log(`Query success for ${queryKey[0]}:`, data);
+      console.log(`Query success for ${fullQueryUrl}:`, data);
       return data;
     } catch (error) {
-      console.error(`Query error for ${queryKey[0]}:`, error);
+      console.error(`Query error for ${fullQueryUrl}:`, error);
       throw error;
     }
   };
@@ -69,3 +82,4 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
